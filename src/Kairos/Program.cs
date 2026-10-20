@@ -18,6 +18,8 @@ public static class Program
 
         switch (mode)
         {
+            case "--selftest-recovery":
+                return PipelineRecoveryProbe.Run(args, Console.Out);
             case "--selftest-quality-trial":
                 return QualityTrialProbe.Run(args, Console.Out);
             case "--selftest-profile":

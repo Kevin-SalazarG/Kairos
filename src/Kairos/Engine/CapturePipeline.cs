@@ -60,7 +60,26 @@ public sealed class CapturePipeline : IDisposable
     /// <summary>Raised on a libobs thread with the finished recording's path and its length without pauses.</summary>
     public event Action<string, double>? RecordingStopped;
 
+    /// <summary>Native recovery self-test checkpoint, after capture sources are owned but before encoders exist.</summary>
+    internal Action? BeforeEncoders { get; init; }
+
     public void Build()
+    {
+        try
+        {
+            BuildCore();
+        }
+        catch
+        {
+            // The caller never receives a completed pipeline. Release partial native ownership now,
+            // including the scene's canvas registration, so retrying cannot retain the failed capture.
+            try { Teardown(); }
+            catch (Exception cleanup) { ObsLog.Warn($"pipeline build cleanup: {cleanup.Message}"); }
+            throw;
+        }
+    }
+
+    void BuildCore()
     {
         var monitor = VideoMath.PickMonitor(ObsHost.Monitors(), _s.Capture.MonitorId);
         int baseW = monitor?.Width ?? 1920, baseH = monitor?.Height ?? 1080;
@@ -79,6 +98,7 @@ public sealed class CapturePipeline : IDisposable
 
         BuildScene(monitor?.Id ?? "", baseW, baseH);
         BuildAudio();
+        BeforeEncoders?.Invoke();
         BuildEncoders();
         _replay = CreateReplayOutput("Kairos replay", "Kairos %CCYY-%MM-%DD %hh-%mm-%ss", _s.Replay.Seconds);
         _onReplaySaved = (_, _) => OnSaved(_replay, quick: false);
