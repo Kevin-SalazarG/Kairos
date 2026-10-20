@@ -18,6 +18,10 @@
                 <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.rxProfileTip}" TextWrapping="Wrap" Margin="0,6,0,12"/>
                 <Button Style="{StaticResource Ghost}" Content="{l:T quality.rxProfileApply}"
                         Command="{Binding Rx6600ProfileCommand}" HorizontalAlignment="Left"/>
+                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.rxTrialTip}" TextWrapping="Wrap" Margin="0,14,0,4"/>
+                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.rxTrialCompareTip}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <Button Style="{StaticResource Ghost}" Content="{l:T quality.rxTrialApply}"
+                        Command="{Binding Rx6600DetailTrialCommand}" HorizontalAlignment="Left"/>
             </StackPanel>
         </Border>
 

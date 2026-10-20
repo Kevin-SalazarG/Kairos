@@ -34,7 +34,14 @@ public static class CaptureProfileTests
     }
 
     [Test]
-    public static void Rx6600_profile_preserves_devices_output_and_preferences()
+    public static void Rx6600_profile_preserves_devices_output_and_preferences() =>
+        AssertPersonalSettingsPreserved(CaptureProfiles.ApplyRx6600);
+
+    [Test]
+    public static void Rx6600_detail_trial_preserves_devices_output_and_preferences() =>
+        AssertPersonalSettingsPreserved(CaptureProfiles.ApplyRx6600DetailTrial);
+
+    static void AssertPersonalSettingsPreserved(Action<AppSettings> applyProfile)
     {
         var settings = new AppSettings
         {
@@ -71,7 +78,7 @@ public static class CaptureProfileTests
         string share = JsonSerializer.Serialize(settings.Share);
         var audioInstance = settings.Audio;
 
-        CaptureProfiles.ApplyRx6600(settings);
+        applyProfile(settings);
 
         Assert.Equal(7, settings.Version, "settings version");
         Assert.Equal("monitor-2", settings.Capture.MonitorId, "monitor selection");
@@ -89,6 +96,42 @@ public static class CaptureProfileTests
         Assert.Equal(false, settings.General.ToastOnSave, "save notification");
         Assert.Equal("es", settings.General.Language, "language");
         Assert.Equal(false, settings.General.CheckUpdates, "update preference");
+    }
+
+    [Test]
+    public static void Rx6600_detail_trial_changes_only_qp_from_the_stable_profile()
+    {
+        var stable = new AppSettings();
+        stable.Normalize();
+        var trial = SettingsStore.Deserialize(SettingsStore.Serialize(stable));
+
+        CaptureProfiles.ApplyRx6600(stable);
+        CaptureProfiles.ApplyRx6600DetailTrial(trial);
+
+        Assert.Equal(16, stable.Video.AmdCqp, "stable profile must remain QP 16");
+        Assert.Equal(14, trial.Video.AmdCqp, "explicit trial uses QP 14");
+        Assert.Equal(1024, trial.Replay.MaxMemoryMb, "trial keeps the packet budget");
+        trial.Video.AmdCqp = stable.Video.AmdCqp;
+        Assert.Equal(SettingsStore.Serialize(stable), SettingsStore.Serialize(trial), "all other settings match");
+    }
+
+    [Test]
+    public static void Rx6600_detail_trial_is_idempotent_and_stable_profile_restores_qp16()
+    {
+        var settings = new AppSettings();
+        CaptureProfiles.ApplyRx6600DetailTrial(settings);
+        string firstApplication = SettingsStore.Serialize(settings);
+        var applied = SettingsStore.Deserialize(firstApplication);
+
+        CaptureProfiles.ApplyRx6600DetailTrial(settings);
+
+        Assert.Equal(firstApplication, SettingsStore.Serialize(settings), "reapplying trial leaves settings unchanged");
+        Assert.Equal(false, SettingsDiff.NeedsRebuild(applied, settings), "unchanged trial keeps the replay buffer");
+
+        CaptureProfiles.ApplyRx6600(settings);
+
+        Assert.Equal(16, settings.Video.AmdCqp, "stable profile reverses the experiment");
+        Assert.True(SettingsDiff.NeedsRebuild(applied, settings), "changing quantizer requires encoder rebuild");
     }
 
     [Test]

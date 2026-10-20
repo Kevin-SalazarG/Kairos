@@ -61,6 +61,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         BrowseFolderCommand = new RelayCommand(_ => BrowseFolder());
         Rx6600ProfileCommand = new RelayCommand(_ => Set(() => CaptureProfiles.ApplyRx6600(_s)),
             _ => Rx6600ProfileAvailable);
+        Rx6600DetailTrialCommand = new RelayCommand(_ => Set(() => CaptureProfiles.ApplyRx6600DetailTrial(_s)),
+            _ => Rx6600ProfileAvailable);
         VoiceRecordCommand = new RelayCommand(_ => VoiceCommand("voice-enroll"));
         VoiceTestCommand = new RelayCommand(_ => { TestCard = "clip"; VoiceCommand("voice-test"); });
         VoiceTestShotCommand = new RelayCommand(_ => { TestCard = "shot"; VoiceCommand("voice-test"); });
@@ -459,6 +461,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     // ------------------------------------------------------------------ quality
 
     public ICommand Rx6600ProfileCommand { get; }
+    public ICommand Rx6600DetailTrialCommand { get; }
     public bool Rx6600ProfileAvailable => EncoderIds != null && CaptureProfiles.IsRx6600Compatible(EncoderIds);
 
     IReadOnlyCollection<string>? EncoderIds => _caps?.Encoders;

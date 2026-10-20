@@ -42,4 +42,14 @@ public static class CaptureProfiles
         settings.Replay.QuickEnabled = false;
         settings.General.OnlyWhenGaming = true;
     }
+
+    /// <summary>
+    /// Explicit QP 14 experiment for comparison with the stable QP 16 profile.
+    /// Keeps the same replay packet budget; larger frames may shorten the available replay.
+    /// </summary>
+    public static void ApplyRx6600DetailTrial(AppSettings settings)
+    {
+        ApplyRx6600(settings);
+        settings.Video.AmdCqp = 14;
+    }
 }

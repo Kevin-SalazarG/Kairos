@@ -24,7 +24,50 @@ public static class AmdViewModelTests
         Assert.Equal(AmdEncoderPreset.Balanced, vm.AmdSpeed);
         Assert.Equal(1024, vm.ReplayMemoryMb);
         Assert.Equal(60, vm.Fps);
-        Assert.True(vm.IsDirty, "the normal Apply action must save the profile");
+    }
+
+    [Test]
+    public static void Detail_trial_requires_amd_hevc_and_can_return_to_the_stable_profile()
+    {
+        var vm = new SettingsViewModel();
+        Assert.True(!vm.Rx6600DetailTrialCommand.CanExecute(null), "trial waits for encoder capabilities");
+        foreach (var encoders in new[] { Array.Empty<string>(), new[] { "h264_texture_amf" }, new[] { "obs_nvenc_hevc_tex" } })
+        {
+            vm.Seed(null, Caps(encoders));
+            Assert.True(!vm.Rx6600DetailTrialCommand.CanExecute(null), "trial requires AMD HEVC");
+        }
+
+        vm.Seed(null, Caps("h265_texture_amf"));
+        Assert.True(vm.Rx6600DetailTrialCommand.CanExecute(null), "AMD HEVC supports the trial");
+        vm.Rx6600ProfileCommand.Execute(null);
+        Assert.Equal(16, vm.AmdQp, "stable profile is still QP 16");
+        vm.Rx6600DetailTrialCommand.Execute(null);
+        Assert.Equal(14, vm.AmdQp, "trial is explicitly selected");
+        Assert.Equal(VideoCodec.Hevc, vm.Codec);
+        Assert.Equal(AmdRateControl.Cqp, vm.AmdMode);
+        Assert.Equal(AmdEncoderPreset.Balanced, vm.AmdSpeed);
+        Assert.Equal(60, vm.Fps);
+        Assert.Equal(1024, vm.ReplayMemoryMb);
+        Assert.True(vm.AmdCqpVisible, "trial shows the effective quantizer");
+        Assert.True(vm.IsDirty && vm.ApplyCommand.CanExecute(null), "trial uses the normal Apply action");
+
+        vm.Rx6600ProfileCommand.Execute(null);
+        Assert.Equal(16, vm.AmdQp, "stable profile restores QP 16");
+    }
+
+    [Test]
+    public static void Detail_trial_does_not_save_settings_or_change_the_default_profile()
+    {
+        string? before = File.Exists(SettingsStore.DefaultPath) ? File.ReadAllText(SettingsStore.DefaultPath) : null;
+        var vm = new SettingsViewModel();
+        vm.Seed(null, Caps("h265_texture_amf"));
+        vm.Rx6600DetailTrialCommand.Execute(null);
+
+        string? after = File.Exists(SettingsStore.DefaultPath) ? File.ReadAllText(SettingsStore.DefaultPath) : null;
+        Assert.Equal(before, after, "profile selection must not save before Apply");
+        var stable = new AppSettings();
+        CaptureProfiles.ApplyRx6600(stable);
+        Assert.Equal(16, stable.Video.AmdCqp, "selecting a trial never changes the stable profile");
     }
 
     [Test]
