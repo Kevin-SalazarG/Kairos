@@ -21,7 +21,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     static readonly string[] StatusProperties =
     [
         nameof(EngineOnline), nameof(State), nameof(StateTitle), nameof(StateDetail), nameof(BufferProgress), nameof(BufferText),
-        nameof(MemoryText), nameof(QualityText), nameof(EncoderText), nameof(LastClipPath), nameof(LastShotPath),
+        nameof(MemoryText), nameof(QualityText), nameof(EncoderText), nameof(LiveCaptureDetailText), nameof(LastClipPath), nameof(LastShotPath),
         nameof(LastClipName), nameof(LastShotName), nameof(HasLastClip), nameof(HasLastShot), nameof(FolderWarning), nameof(EffectiveFolder),
         nameof(SaveVisible), nameof(ReplayPauseVisible), nameof(ReplayPauseTip), nameof(RecordState), nameof(RecordTitle), nameof(RecordDetail),
         nameof(IsRecording), nameof(IsRecordingLive), nameof(StartPrimaryVisible), nameof(StartGhostVisible), nameof(RecordPauseLabel),
@@ -463,6 +463,18 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public ICommand Rx6600ProfileCommand { get; }
     public ICommand Rx6600DetailTrialCommand { get; }
     public bool Rx6600ProfileAvailable => EncoderIds != null && CaptureProfiles.IsRx6600Compatible(EncoderIds);
+    public bool Rx6600ProfileVisible => EncoderIds == null || Rx6600ProfileAvailable;
+    public bool Rx6600StableSelected => MatchesRx6600Profile(16);
+    public bool Rx6600DetailSelected => MatchesRx6600Profile(14);
+
+    // A checkmark describes the whole staged profile, including its replay and capture settings.
+    bool MatchesRx6600Profile(int qp) =>
+        _s.Capture.Mode == CaptureMode.Game && !_s.Capture.GameFallbackToScreen &&
+        _s.Video.Codec == VideoCodec.Hevc && _s.Video.Resolution == OutputResolution.P1080 && _s.Video.Fps == 60 &&
+        _s.Video.AmdRateControl == AmdRateControl.Cqp && _s.Video.AmdCqp == qp &&
+        _s.Video.AmdPreset == AmdEncoderPreset.Balanced &&
+        _s.Replay.Enabled && _s.Replay.Seconds == 120 && _s.Replay.MaxMemoryMb == 1024 &&
+        !_s.Replay.QuickEnabled && _s.General.OnlyWhenGaming;
 
     IReadOnlyCollection<string>? EncoderIds => _caps?.Encoders;
 
@@ -871,6 +883,12 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public string MemoryText => _status?.Engine is { } e ? Text.Ltr($"{e.WorkingSetMb} MB") : "–";
 
     public string QualityText => _status?.Engine is { } e ? $"{CodecName(e.Encoder)} • {e.Height}p{Math.Round(e.Fps)}" : "–";
+
+    /// <summary>Actual running settings; unsaved profile selections must not change the live readout.</summary>
+    public string LiveCaptureDetailText => _status?.Engine is { } e
+        ? string.IsNullOrEmpty(e.RateControl) ? EncoderText
+            : $"{EncoderText} · {e.RateControl}" + (e.QualityLevel > 0 ? $" {e.QualityLevel}" : "")
+        : "";
 
     public string EncoderText => _status?.Engine?.Encoder switch
     {

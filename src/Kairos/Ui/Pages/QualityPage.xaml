@@ -8,20 +8,87 @@
                 <TextBlock Text="{l:T quality.recommended}" FontSize="11" Foreground="{StaticResource Success}"/>
             </Border>
         </DataTemplate>
+        <Style x:Key="AdvancedCard" TargetType="Expander">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                              FocusVisualStyle="{StaticResource KeyFocus}" Cursor="Hand"
+                                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                              AutomationProperties.Name="{l:T quality.advanced}">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border Background="Transparent" MinHeight="42">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                                                        <TextBlock Style="{StaticResource Section}" Text="{l:T quality.advanced}"/>
+                                                        <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.advancedSummary}"/>
+                                                    </StackPanel>
+                                                    <TextBlock x:Name="Arrow" Grid.Column="1" Style="{StaticResource Icon}"
+                                                               Text="&#xE70D;" FontSize="12" Foreground="{StaticResource TextSecondary}"/>
+                                                </Grid>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Arrow" Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter TargetName="Arrow" Property="Text" Value="&#xE70E;"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                                <ContentPresenter x:Name="Details" Margin="0,18,0,0" Visibility="Collapsed" ContentSource="Content"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="Details" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
     <StackPanel>
         <TextBlock Style="{StaticResource Title}" Text="{l:T nav.quality}"/>
 
-        <Border Style="{StaticResource Card}">
+        <Border Style="{StaticResource Card}" Visibility="{Binding Rx6600ProfileVisible, Converter={StaticResource Vis}}">
             <StackPanel>
-                <TextBlock Style="{StaticResource Section}" Text="{l:T quality.rxProfile}"/>
-                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.rxProfileTip}" TextWrapping="Wrap" Margin="0,6,0,12"/>
-                <Button Style="{StaticResource Ghost}" Content="{l:T quality.rxProfileApply}"
-                        Command="{Binding Rx6600ProfileCommand}" HorizontalAlignment="Left"/>
-                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.rxTrialTip}" TextWrapping="Wrap" Margin="0,14,0,4"/>
-                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.rxTrialCompareTip}" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <Button Style="{StaticResource Ghost}" Content="{l:T quality.rxTrialApply}"
-                        Command="{Binding Rx6600DetailTrialCommand}" HorizontalAlignment="Left"/>
+                <TextBlock Style="{StaticResource Section}" Text="{l:T quality.rxProfile}" TextWrapping="Wrap"/>
+                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.rxProfileTip}" Margin="0,4,0,14"/>
+                <UniformGrid Columns="2" Margin="0,0,-12,0">
+                    <RadioButton Style="{StaticResource ChoiceCard}" GroupName="rxProfile" Command="{Binding Rx6600ProfileCommand}"
+                                 IsChecked="{Binding Rx6600StableSelected, Mode=OneWay}"
+                                 AutomationProperties.Name="{l:T quality.rxProfileApply}"
+                                 ToolTip="{l:T quality.rxProfileApply}" ToolTipService.ShowOnDisabled="True">
+                        <StackPanel>
+                            <TextBlock Text="{l:T quality.rxStableTitle}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <TextBlock Text="QP16" FontSize="12" Foreground="{DynamicResource Accent}" FlowDirection="LeftToRight" Margin="0,4,0,0"/>
+                            <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.rxStableDescription}" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource ChoiceCard}" GroupName="rxProfile" Command="{Binding Rx6600DetailTrialCommand}"
+                                 IsChecked="{Binding Rx6600DetailSelected, Mode=OneWay}"
+                                 AutomationProperties.Name="{l:T quality.rxTrialApply}"
+                                 ToolTip="{l:T quality.rxTrialApply}" ToolTipService.ShowOnDisabled="True">
+                        <StackPanel>
+                            <TextBlock Text="{l:T quality.rxDetailTitle}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <TextBlock Text="QP14" FontSize="12" Foreground="{DynamicResource Accent}" FlowDirection="LeftToRight" Margin="0,4,0,0"/>
+                            <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.rxDetailDescription}" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </RadioButton>
+                </UniformGrid>
+                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.rxApplyHint}" Margin="0,12,0,0"/>
             </StackPanel>
         </Border>
 
@@ -30,7 +97,7 @@
             <TextBlock Text="{l:T quality.cpuOnly}" TextWrapping="Wrap"/>
         </Border>
 
-        <Border Style="{StaticResource Card}">
+        <Border Style="{StaticResource Card}" Visibility="{Binding LegacyQualityVisible, Converter={StaticResource Vis}}">
             <StackPanel>
                 <TextBlock Style="{StaticResource Section}" Text="{l:T quality.preset}" Visibility="{Binding LegacyQualityVisible, Converter={StaticResource Vis}}"/>
                 <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.presetTip}" Margin="0,3,0,12" Visibility="{Binding LegacyQualityVisible, Converter={StaticResource Vis}}"/>
@@ -74,7 +141,54 @@
                             AutomationProperties.Name="{l:T quality.maxBitrate}"/>
                 </StackPanel>
 
-                <TextBlock Text="{Binding EstimateText}" Style="{StaticResource Caption}" Margin="0,14,0,0"/>
+                <TextBlock Text="{Binding EstimateText}" Style="{StaticResource Caption}" Margin="0,14,0,0"
+                           Visibility="{Binding BitrateControlVisible, Converter={StaticResource Vis}}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Picture size, frame rate and encoder speed -->
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource CardTitle}" Text="{l:T quality.picture}"/>
+                <StackPanel>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="250"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="{l:T quality.resolution}"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding Resolutions}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                  SelectedValue="{Binding Resolution}" AutomationProperties.Name="{l:T quality.resolution}"/>
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="250"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="{l:T quality.fps}"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding FpsOptions}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Fps}"
+                                  AutomationProperties.Name="{l:T quality.fps}"/>
+                    </Grid>
+                    <Border Style="{StaticResource Divider}" Visibility="{Binding NvencSpeedVisible, Converter={StaticResource Vis}}"/>
+                    <Grid ToolTip="{l:T quality.encoderPresetTip}" Visibility="{Binding NvencSpeedVisible, Converter={StaticResource Vis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="250"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="{l:T quality.encoderPreset}"/>
+                        <StackPanel Grid.Column="1">
+                            <Slider Minimum="1" Maximum="7" Value="{Binding PresetLevel}" IsSnapToTickEnabled="True" TickFrequency="1"
+                                    TickPlacement="BottomRight" AutomationProperties.Name="{l:T quality.encoderPreset}"/>
+                            <Grid Margin="0,2,0,0">
+                                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.faster}" HorizontalAlignment="Left" Margin="0"/>
+                                <TextBlock Style="{StaticResource Caption}" HorizontalAlignment="Center" Margin="0" FontWeight="SemiBold">
+                                    <Run Text=""/><Run Text="{Binding PresetWord, Mode=OneWay}"/>
+                                </TextBlock>
+                                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.better}" HorizontalAlignment="Right" Margin="0"/>
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -103,70 +217,38 @@
                 </WrapPanel>
             </RadioButton>
         </UniformGrid>
-        <Border Style="{StaticResource Card}" Visibility="{Binding AmdControlsVisible, Converter={StaticResource Vis}}">
+        <Expander x:Name="AdvancedEncoding" Style="{StaticResource AdvancedCard}" Header="{l:T quality.advanced}"
+                  AutomationProperties.Name="{l:T quality.advanced}"
+                  Visibility="{Binding AmdControlsVisible, Converter={StaticResource Vis}}">
             <StackPanel>
-                <TextBlock Style="{StaticResource Section}" Text="{l:T quality.amdTitle}"/>
-                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.amdTip}" TextWrapping="Wrap" Margin="0,6,0,14"/>
+                <TextBlock Style="{StaticResource CardTitle}" Text="{l:T quality.amdTitle}"/>
                 <TextBlock Text="{l:T quality.amdMode}" Style="{StaticResource Label}"/>
                 <ComboBox ItemsSource="{Binding AmdModes}" DisplayMemberPath="Label" SelectedValuePath="Value"
                           SelectedValue="{Binding AmdMode}" Margin="0,4,0,12" AutomationProperties.Name="{l:T quality.amdMode}"/>
                 <StackPanel Visibility="{Binding AmdCqpVisible, Converter={StaticResource Vis}}">
-                    <TextBlock Style="{StaticResource Label}"><Run Text="{l:T quality.amdQp}"/><Run Text=" · "/><Run Text="{Binding AmdQp, Mode=OneWay}"/></TextBlock>
-                    <Slider Minimum="1" Maximum="{Binding AmdQpMaximum}" Value="{Binding AmdQp}" IsSnapToTickEnabled="True" TickFrequency="1"
-                            Margin="0,6,0,12" AutomationProperties.Name="{l:T quality.amdQp}"/>
-                </StackPanel>
-                <TextBlock Text="{l:T quality.encoderPreset}" Style="{StaticResource Label}"/>
-                <ComboBox ItemsSource="{Binding AmdSpeeds}" DisplayMemberPath="Label" SelectedValuePath="Value"
-                          SelectedValue="{Binding AmdSpeed}" Margin="0,4,0,12" AutomationProperties.Name="{l:T quality.encoderPreset}"/>
-                <TextBlock Text="{l:T quality.replayMemory}" Style="{StaticResource Label}"/>
-                <ComboBox ItemsSource="{Binding ReplayMemoryOptions}" DisplayMemberPath="Label" SelectedValuePath="Value"
-                          SelectedValue="{Binding ReplayMemoryMb}" Margin="0,4,0,8" AutomationProperties.Name="{l:T quality.replayMemory}"/>
-                <TextBlock Text="{l:T quality.replayMemoryTip}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
-            </StackPanel>
-        </Border>
-        <!-- Picture size, frame rate and encoder speed -->
-        <Border Style="{StaticResource Card}">
-            <StackPanel>
-                <StackPanel>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="250"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource Label}" Text="{l:T quality.resolution}"/>
-                        <ComboBox Grid.Column="1" ItemsSource="{Binding Resolutions}" DisplayMemberPath="Label" SelectedValuePath="Value"
-                                  SelectedValue="{Binding Resolution}" AutomationProperties.Name="{l:T quality.resolution}"/>
-                    </Grid>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="250"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource Label}" Text="{l:T quality.fps}"/>
-                        <ComboBox Grid.Column="1" ItemsSource="{Binding FpsOptions}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Fps}"
-                                  AutomationProperties.Name="{l:T quality.fps}"/>
+                        <TextBlock Style="{StaticResource Label}" Text="{l:T quality.amdQp}" TextWrapping="Wrap"/>
+                        <TextBlock Grid.Column="1" Text="{Binding AmdQp}" FontSize="16" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Accent}" FlowDirection="LeftToRight" Margin="12,0,0,0"/>
                     </Grid>
-                    <Border Style="{StaticResource Divider}"/>
-                    <Grid ToolTip="{l:T quality.encoderPresetTip}" Visibility="{Binding NvencSpeedVisible, Converter={StaticResource Vis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="250"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource Label}" Text="{l:T quality.encoderPreset}"/>
-                        <StackPanel Grid.Column="1">
-                            <Slider Minimum="1" Maximum="7" Value="{Binding PresetLevel}" IsSnapToTickEnabled="True" TickFrequency="1"
-                                    TickPlacement="BottomRight" AutomationProperties.Name="{l:T quality.encoderPreset}"/>
-                            <Grid Margin="0,2,0,0">
-                                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.faster}" HorizontalAlignment="Left" Margin="0"/>
-                                <TextBlock Style="{StaticResource Caption}" HorizontalAlignment="Center" Margin="0" FontWeight="SemiBold">
-                                    <Run Text=""/><Run Text="{Binding PresetWord, Mode=OneWay}"/>
-                                </TextBlock>
-                                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.better}" HorizontalAlignment="Right" Margin="0"/>
-                            </Grid>
-                        </StackPanel>
-                    </Grid>
+                    <Slider Minimum="1" Maximum="{Binding AmdQpMaximum}" Value="{Binding AmdQp}" IsSnapToTickEnabled="True" TickFrequency="1"
+                            Margin="0,6,0,0" AutomationProperties.Name="{l:T quality.amdQp}"/>
+                    <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.amdTip}" Margin="0,4,0,14"/>
                 </StackPanel>
+                <TextBlock Text="{l:T quality.encoderPreset}" Style="{StaticResource Label}"/>
+                <ComboBox ItemsSource="{Binding AmdSpeeds}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                          SelectedValue="{Binding AmdSpeed}" Margin="0,4,0,0" AutomationProperties.Name="{l:T quality.encoderPreset}"/>
+                <Border Style="{StaticResource Divider}"/>
+                <TextBlock Text="{l:T quality.replayMemory}" Style="{StaticResource Label}"/>
+                <ComboBox ItemsSource="{Binding ReplayMemoryOptions}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                          SelectedValue="{Binding ReplayMemoryMb}" Margin="0,4,0,8" AutomationProperties.Name="{l:T quality.replayMemory}"/>
+                <TextBlock Text="{Binding EstimateText}" Style="{StaticResource Caption}" Margin="0,6,0,0"/>
+                <TextBlock Text="{l:T quality.replayMemoryTip}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
             </StackPanel>
-        </Border>
+        </Expander>
     </StackPanel>
 </UserControl>

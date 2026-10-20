@@ -40,8 +40,6 @@
     </UserControl.Resources>
     <StackPanel>
         <TextBlock Style="{StaticResource Title}" Text="{l:T nav.status}"/>
-        <TextBlock Text="{l:T quality.replayMemoryTip}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="2,0,2,12"
-                   Visibility="{Binding AmdControlsVisible, Converter={StaticResource Vis}}"/>
 
         <!-- Only when something needs attention -->
         <Border Style="{StaticResource Notice}" Visibility="{Binding FolderWarning, Converter={StaticResource Vis}}">
@@ -127,7 +125,7 @@
         <StackPanel Visibility="{Binding EngineOnline, Converter={StaticResource Vis}}">
             <!-- Metrics -->
             <UniformGrid Columns="3" Margin="-6,0,-6,6">
-                <Border Style="{StaticResource Card}" Margin="6,0,6,6">
+                <Border Style="{StaticResource Card}" Margin="6,0,6,6" ToolTip="{l:T status.bufferTip}">
                     <StackPanel>
                         <TextBlock Text="{l:T status.buffer}" Style="{StaticResource Caption}" Margin="0"/>
                         <TextBlock Style="{StaticResource Value}" Text="{Binding BufferText}" Margin="0,6,0,8"/>
@@ -144,7 +142,10 @@
                 <Border Style="{StaticResource Card}" Margin="6,0,6,6" ToolTip="{Binding EncoderText}">
                     <StackPanel>
                         <TextBlock Text="{l:T status.quality}" Style="{StaticResource Caption}" Margin="0"/>
-                        <TextBlock Style="{StaticResource Value}" Text="{Binding QualityText}" Margin="0,6,0,0"/>
+                        <TextBlock Style="{StaticResource Value}" Text="{Binding QualityText}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding LiveCaptureDetailText}" Style="{StaticResource Caption}" Margin="0,6,0,0"
+                                   TextWrapping="Wrap" FlowDirection="LeftToRight"
+                                   Visibility="{Binding LiveCaptureDetailText, Converter={StaticResource Vis}}"/>
                     </StackPanel>
                 </Border>
             </UniformGrid>

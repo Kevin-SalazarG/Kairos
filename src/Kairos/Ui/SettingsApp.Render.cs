@@ -192,6 +192,7 @@ public static partial class SettingsApp
     /// <summary>
     /// Draws one page to a PNG without creating a visible window (no focus change, nothing on screen).
     /// Usage: --render &lt;page&gt; &lt;out.png&gt; [ar|en] [theme color id] [enrolling|testing]
+    /// Quality variants: quality-min, quality-advanced, quality-advanced-min.
     /// The last argument shows a Smart Save state that otherwise needs the engine to be in that mode.
     /// </summary>
     public static int Render(string page, string outPng, string? language, string? voiceState = null)
@@ -403,7 +404,14 @@ public static partial class SettingsApp
             }
         }
         else
-            window.ShowPage(page);
+            window.ShowPage(page is "quality-min" or "quality-advanced" or "quality-advanced-min" ? "quality" : page);
+        if (page is "quality-advanced" or "quality-advanced-min")
+        {
+            var advanced = (window.PageHost.Content as FrameworkElement)?.FindName("AdvancedEncoding")
+                as System.Windows.Controls.Expander
+                ?? throw new InvalidOperationException("The quality render requires the AdvancedEncoding expander.");
+            advanced.IsExpanded = true;
+        }
         var root = (FrameworkElement)window.Content;
         window.Content = null;
         // share-emoji: the caption's emoji picker on its own (it opens in a popup, outside the window's picture).
@@ -441,6 +449,13 @@ public static partial class SettingsApp
             border.UpdateLayout();
             Pump();
             Thread.Sleep(150);
+        }
+        if (page is "quality-advanced" or "quality-advanced-min")
+        {
+            window.Scroller.ScrollToEnd();
+            border.UpdateLayout();
+            Pump();
+            border.UpdateLayout();
         }
 
         const double scale = 1.5;

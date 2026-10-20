@@ -1,4 +1,5 @@
 using Kairos.App;
+using Kairos.Engine;
 using Kairos.Settings;
 using Kairos.Ui;
 
@@ -7,6 +8,43 @@ namespace Kairos.Tests;
 public static class AmdViewModelTests
 {
     static CapsDto Caps(params string[] encoders) => new([], [], [], [], [.. encoders], "32.2.2");
+
+    [Test]
+    public static void Profile_selection_describes_the_whole_staged_profile()
+    {
+        var vm = new SettingsViewModel();
+        vm.Seed(null, Caps("h265_texture_amf"));
+        vm.Rx6600ProfileCommand.Execute(null);
+        Assert.True(vm.Rx6600StableSelected && !vm.Rx6600DetailSelected, "stable profile is selected");
+        vm.Fps = 30;
+        Assert.True(!vm.Rx6600StableSelected && !vm.Rx6600DetailSelected, "custom FPS is not the complete profile");
+        vm.Fps = 60;
+        Assert.True(vm.Rx6600StableSelected, "restoring the profile restores its checkmark");
+        vm.Rx6600DetailTrialCommand.Execute(null);
+        Assert.True(vm.Rx6600DetailSelected && !vm.Rx6600StableSelected, "detail profile replaces the selection");
+        vm.ReplayMemoryMb = 512;
+        Assert.True(!vm.Rx6600StableSelected && !vm.Rx6600DetailSelected, "a changed replay budget is custom");
+    }
+
+    [Test]
+    public static void Live_compression_readout_ignores_unsaved_edits_and_refreshes_with_status()
+    {
+        var vm = new SettingsViewModel();
+        var engine = new EngineStatus(true, false, 60, 0, 0, 600, 10, 120,
+            "h265_texture_amf", 1920, 1080, 200, 1024, "", false, null, RateControl: "CQP", QualityLevel: 16);
+        var status = new StatusDto(engine, [], null, null, false, false, "1.0.1");
+        vm.Seed(status, Caps("h265_texture_amf"));
+        string liveBefore = vm.LiveCaptureDetailText;
+        vm.Rx6600DetailTrialCommand.Execute(null);
+        Assert.Equal(14, vm.AmdQp, "draft changes to QP 14");
+        Assert.Equal(liveBefore, vm.LiveCaptureDetailText, "the running readout must remain QP 16 before Apply");
+        Assert.True(liveBefore.Contains("CQP 16", StringComparison.Ordinal), "native settings are visible");
+        bool notified = false;
+        vm.PropertyChanged += (_, e) => notified |= e.PropertyName == nameof(vm.LiveCaptureDetailText);
+        vm.SeedStatus(status with { Engine = engine with { QualityLevel = 14 } });
+        Assert.True(notified && vm.LiveCaptureDetailText.Contains("CQP 14", StringComparison.Ordinal),
+            "a status update refreshes the actual readout");
+    }
 
     [Test]
     public static void Profile_command_requires_amd_hevc_and_updates_effective_controls()
