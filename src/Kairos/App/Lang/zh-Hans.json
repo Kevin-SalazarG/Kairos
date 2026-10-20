@@ -1,4 +1,7 @@
 {
+  "quality.rxProfile": "RX 6600 配置",
+  "quality.rxProfileTip": "1080p60 HEVC、原生 QP 16、两分钟回放和 1 GB 数据包预算。适用于 RX 6600 / Ryzen 5 5600G / 16 GB 的初始设置；请测试运动细节和游戏性能。",
+  "quality.rxProfileApply": "使用此配置",
   "app": "Kairos",
   "tray.save": "保存片段",
   "tray.quick": "保存最近 {0}",

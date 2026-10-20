@@ -1,4 +1,7 @@
 {
+  "quality.rxProfile": "ملف RX 6600",
+  "quality.rxProfileTip": "HEVC بدقة 1080p60 وجودة QP أصلية 16 وإعادة لمدة دقيقتين وميزانية حزم 1 GB. نقطة بداية لـ RX 6600 / Ryzen 5 5600G / 16 GB؛ اختبر تفاصيل الحركة وأداء اللعبة.",
+  "quality.rxProfileApply": "استخدام هذا الملف",
   "app": "Kairos",
   "tray.save": "حفظ مقطع",
   "tray.quick": "حفظ آخر {0}",

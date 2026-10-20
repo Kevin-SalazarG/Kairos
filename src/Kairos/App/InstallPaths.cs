@@ -26,7 +26,7 @@ public static class InstallPaths
             && File.Exists(Path.Combine(root, "Update.exe")) ? root : null;
     }
 
-    public static string StubFor(string root) => Path.Combine(root, AppInfo.Name + ".exe");
+    public static string StubFor(string root) => Path.Combine(root, AppInfo.ExecutableName + ".exe");
 
     /// <summary><paramref name="path"/> is <paramref name="root"/> or a folder in it (any case, trailing slashes ignored).</summary>
     public static bool IsInside(string root, string path)
@@ -79,7 +79,7 @@ public static class InstallPaths
 
     static List<int> Own(string root)
     {
-        var all = Process.GetProcessesByName(AppInfo.Name);
+        var all = Process.GetProcessesByName(AppInfo.ExecutableName);
         try
         {
             return OwnProcesses(root, all.Select(p => (p.Id, ForegroundApp.ImagePath(p.Id))), Environment.ProcessId).ToList();

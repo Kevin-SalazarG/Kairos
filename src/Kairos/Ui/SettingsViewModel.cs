@@ -59,6 +59,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         RevertCommand = new RelayCommand(_ => Load(), _ => IsDirty);
         RefreshCapsCommand = new RelayCommand(_ => LoadCapsAsync());
         BrowseFolderCommand = new RelayCommand(_ => BrowseFolder());
+        Rx6600ProfileCommand = new RelayCommand(_ => Set(() => CaptureProfiles.ApplyRx6600(_s)),
+            _ => Rx6600ProfileAvailable);
         VoiceRecordCommand = new RelayCommand(_ => VoiceCommand("voice-enroll"));
         VoiceTestCommand = new RelayCommand(_ => { TestCard = "clip"; VoiceCommand("voice-test"); });
         VoiceTestShotCommand = new RelayCommand(_ => { TestCard = "shot"; VoiceCommand("voice-test"); });
@@ -448,6 +450,9 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public int QuickSeconds { get => _s.Replay.QuickSeconds; set => Set(() => _s.Replay.QuickSeconds = value); }
 
     // ------------------------------------------------------------------ quality
+
+    public ICommand Rx6600ProfileCommand { get; }
+    public bool Rx6600ProfileAvailable => EncoderIds != null && CaptureProfiles.IsRx6600Compatible(EncoderIds);
 
     IReadOnlyCollection<string>? EncoderIds => _caps?.Encoders;
 

@@ -29,7 +29,7 @@ public static class SettingsTests
         Assert.Equal(true, s.General.SoundOnSave, "sound");
         Assert.Equal(true, s.General.ToastOnSave, "toast");
         Assert.Equal("ar", s.General.Language, "language");
-        Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "Kairos"), s.Output.Folder, "clips folder");
+        Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), AppInfo.Name), s.Output.Folder, "clips folder");
     }
 
     [Test]

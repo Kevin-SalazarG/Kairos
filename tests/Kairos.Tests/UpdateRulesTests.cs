@@ -54,7 +54,7 @@ public static class UpdateRulesTests
     public static void Notes_link_only_for_github()
     {
         Assert.Equal(null, UpdateRules.NotesUrl("1.0.1", localSource: true), "a local folder has no page");
-        Assert.Equal("https://github.com/BasilForge/Kairos/releases/tag/v1.0.1", UpdateRules.NotesUrl("1.0.1", localSource: false), "GitHub");
+        Assert.Equal("https://github.com/Kevin-SalazarG/Kairos/releases/tag/v1.0.1", UpdateRules.NotesUrl("1.0.1", localSource: false), "GitHub");
     }
 
     [Test]

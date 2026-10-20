@@ -9,7 +9,7 @@ public sealed record UpdateStatus(string Version, UpdateState State, int Percent
 /// <summary>The decisions about updates, apart from the downloading itself.</summary>
 public static class UpdateRules
 {
-    public const string Repository = "https://github.com/BasilForge/Kairos";
+    public const string Repository = "https://github.com/Kevin-SalazarG/Kairos";
 
     /// <summary>The first look waits this long after the replay buffer is up, so a start-up is never slowed by it.</summary>
     public static readonly TimeSpan FirstDelay = TimeSpan.FromSeconds(60);

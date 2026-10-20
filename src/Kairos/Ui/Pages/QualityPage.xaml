@@ -12,6 +12,15 @@
     <StackPanel>
         <TextBlock Style="{StaticResource Title}" Text="{l:T nav.quality}"/>
 
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource Section}" Text="{l:T quality.rxProfile}"/>
+                <TextBlock Style="{StaticResource Caption}" Text="{l:T quality.rxProfileTip}" TextWrapping="Wrap" Margin="0,6,0,12"/>
+                <Button Style="{StaticResource Ghost}" Content="{l:T quality.rxProfileApply}"
+                        Command="{Binding Rx6600ProfileCommand}" HorizontalAlignment="Left"/>
+            </StackPanel>
+        </Border>
+
         <Border Style="{StaticResource Card}" Background="{StaticResource WarningSoft}" BorderBrush="{StaticResource Warning}"
                 Visibility="{Binding CpuOnly, Converter={StaticResource Vis}}">
             <TextBlock Text="{l:T quality.cpuOnly}" TextWrapping="Wrap"/>

@@ -26,6 +26,7 @@ public partial class MainWindow : Window
         _accounts = new ConnectionsViewModel(accountsHost ?? new WpfAccountsHost(this));
         SettingsApp.StartupTrace?.Invoke("window models");
         InitializeComponent();
+        Title = AppInfo.Name;
         SettingsApp.StartupTrace?.Invoke("window xaml");
         DataContext = vm;
         LibraryBar.DataContext = _clips; // the Library's chosen clips
@@ -78,7 +79,6 @@ public partial class MainWindow : Window
         HotkeyBox.TypingChanged += typing;
         Closed += (_, _) => HotkeyBox.TypingChanged -= typing;
         _vm.SetTypingHotkey(false); // nothing left over from a window that closed while typing
-        Title = Text.Get("app");
         // Drawn once from Fraunces (Kai + italic ro) and Aref Ruqaa (كا + slanted يرو), six times the size shown.
         Wordmark.Source = new System.Windows.Media.Imaging.BitmapImage(
             new Uri($"pack://application:,,,/Kairos;component/Ui/Assets/wordmark-{(Text.IsArabic ? "ar" : "en")}.png"));

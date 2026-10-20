@@ -1,4 +1,7 @@
 {
+  "quality.rxProfile": "Perfil RX 6600",
+  "quality.rxProfileTip": "1080p60 HEVC, QP nativo 16, replay de dois minutos e orçamento de pacotes de 1 GB. Ponto de partida para RX 6600 / Ryzen 5 5600G / 16 GB; teste detalhes em movimento e desempenho.",
+  "quality.rxProfileApply": "Usar este perfil",
   "app": "Kairos",
   "tray.save": "Salvar clipe",
   "tray.quick": "Salvar os últimos {0}",
