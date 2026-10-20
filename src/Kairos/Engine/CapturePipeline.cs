@@ -242,7 +242,7 @@ public sealed class CapturePipeline : IDisposable
 
         using (var d = new ObsData())
         {
-            foreach (var (key, value) in EncoderCatalog.Settings(Plan, choice))
+            foreach (var (key, value) in EncoderCatalog.Settings(Plan, choice, _s.Video))
             {
                 switch (value)
                 {
@@ -284,7 +284,7 @@ public sealed class CapturePipeline : IDisposable
 
     IntPtr CreateReplayOutput(string name, string format, int seconds)
     {
-        int sizeMb = BufferBudget.CapMb(EncoderPresets.EstimateBufferMb(Plan!.MaxBitrateKbps, seconds), BufferBudget.PhysicalMemoryBytes);
+        int sizeMb = ReplayBudget.LimitMb(_s, Choice!, Plan!, seconds, BufferBudget.PhysicalMemoryBytes);
         using var d = new ObsData()
             .Set("directory", ClipsFolder).Set("format", format).Set("extension", "mp4").Set("allow_spaces", true)
             .Set("max_time_sec", (long)seconds).Set("max_size_mb", (long)sizeMb);
@@ -353,7 +353,9 @@ public sealed class CapturePipeline : IDisposable
 
     /// <summary>What a buffer holds now, about (its bitrate times the seconds filled): how long writing it may take.</summary>
     public long BufferBytes => Plan == null || !BufferActive ? 0
-        : (long)EncoderPresets.EstimateBufferMb(Plan.MaxBitrateKbps,
+        : Choice?.Vendor == EncoderVendor.Amd
+            ? ReplayBudget.LimitMb(_s, Choice, Plan, _s.Replay.Seconds, BufferBudget.PhysicalMemoryBytes) * 1024L * 1024
+            : (long)EncoderPresets.EstimateBufferMb(Plan.MaxBitrateKbps,
             (int)Math.Min(_s.Replay.Seconds, (DateTime.UtcNow - _bufferStartedUtc).TotalSeconds)) * 1024 * 1024;
 
     /// <summary>Requests a save and says what happened: started, off, just starting, or one is already being written.</summary>
@@ -465,8 +467,7 @@ public sealed class CapturePipeline : IDisposable
             video == IntPtr.Zero ? 0 : Obs.video_output_get_skipped_frames(video),
             video == IntPtr.Zero ? 0 : Obs.video_output_get_total_frames(video),
             filled, target, Choice?.Id ?? "", Output.W, Output.H, Environment.WorkingSet / (1024 * 1024),
-            Plan == null ? 0 : Math.Min(EncoderPresets.EstimateBufferMb(Plan.MaxBitrateKbps, target),
-                BufferBudget.CapMb(EncoderPresets.EstimateBufferMb(Plan.MaxBitrateKbps, target), BufferBudget.PhysicalMemoryBytes)),
+            Plan == null ? 0 : ReplayBudget.LimitMb(_s, Choice!, Plan, target, BufferBudget.PhysicalMemoryBytes),
             ClipsFolder, FolderFellBack, LastError,
             RecordingPaused,
             Recording ? _recordClock.Seconds(DateTime.UtcNow) : 0,

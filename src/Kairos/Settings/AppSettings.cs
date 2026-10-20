@@ -8,6 +8,8 @@ public enum VideoCodec { Av1, Hevc, H264 }
 
 public enum QualityPreset { Ultra, High, Balanced, Light, Custom }
 
+public enum AmdRateControl { Qvbr, Cqp }
+
 public enum OutputResolution { Native, P2160, P1440, P1080, P720 }
 
 public enum VoiceSensitivity { Strict, Normal, Easy }
@@ -60,9 +62,12 @@ public sealed class AppSettings
         Video.CustomCq = Math.Clamp(Video.CustomCq, 1, 63);
         Video.CustomMbps = Math.Clamp(Video.CustomMbps, 2, 300);
         if (string.IsNullOrWhiteSpace(Video.Preset)) Video.Preset = "p5";
+        if (!Enum.IsDefined(Video.AmdRateControl)) Video.AmdRateControl = AmdRateControl.Qvbr;
+        Video.AmdCqp = Math.Clamp(Video.AmdCqp, 1, 51);
 
         Replay.Seconds = Math.Clamp(Replay.Seconds, 15, 1200);
         Replay.QuickSeconds = Math.Clamp(Replay.QuickSeconds, 5, 120);
+        Replay.MaxMemoryMb = Math.Clamp(Replay.MaxMemoryMb, 128, 4096);
 
         Audio.SystemVolume = Math.Clamp(Audio.SystemVolume, 0, 2);
         Audio.MicVolume = Math.Clamp(Audio.MicVolume, 0, 2);
@@ -110,6 +115,9 @@ public sealed class VideoSettings
     public int CustomCq { get; set; } = 22;
     public int CustomMbps { get; set; } = 40;
     public string Preset { get; set; } = "p5";
+    // Keep old settings on QVBR; CQP uses the codec's native QP scale, without AV1 conversion.
+    public AmdRateControl AmdRateControl { get; set; } = AmdRateControl.Qvbr;
+    public int AmdCqp { get; set; } = 16;
 }
 
 public sealed class ReplaySettings
@@ -118,6 +126,8 @@ public sealed class ReplaySettings
     public int Seconds { get; set; } = 300;
     public bool QuickEnabled { get; set; }
     public int QuickSeconds { get; set; } = 30;
+    /// <summary>Total encoded-packet budget for AMD quality modes; they do not enforce a bitrate ceiling.</summary>
+    public int MaxMemoryMb { get; set; } = 1024;
 }
 
 public sealed class AudioSettings

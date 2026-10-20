@@ -51,7 +51,7 @@ public static class EncoderCatalog
     }
 
     /// <summary>libobs encoder settings for <paramref name="choice"/>, from the quality numbers in <paramref name="plan"/>.</summary>
-    public static Dictionary<string, object> Settings(EncoderPlan plan, EncoderChoice choice)
+    public static Dictionary<string, object> Settings(EncoderPlan plan, EncoderChoice choice, VideoSettings? video = null)
     {
         // plan.Cq is on the 1-63 scale for AV1 and the 1-51 scale for HEVC/H.264 (see EncoderPresets).
         long cq = plan.Cq;
@@ -75,10 +75,12 @@ public static class EncoderCatalog
                 s["adaptive_quantization"] = true;
                 break;
             case EncoderVendor.Amd:
-                s["rate_control"] = "QVBR";
-                s["cqp"] = choice.Codec == VideoCodec.Av1 ? cq : cq51;
-                s["bitrate"] = (long)plan.MaxBitrateKbps;
+                bool constantQp = video?.AmdRateControl == AmdRateControl.Cqp;
+                s["rate_control"] = constantQp ? "CQP" : "QVBR";
+                s["cqp"] = constantQp ? (long)Math.Clamp(video!.AmdCqp, 1, 51) : cq;
+                // OBS AMF ignores bitrate in CQP and QVBR. Do not advertise it as a quality cap.
                 s["preset"] = "quality";
+                s["pre_analysis"] = false;
                 s["profile"] = profile;
                 s["bf"] = choice.Codec == VideoCodec.Hevc ? 0L : 2L;
                 break;
