@@ -12,6 +12,7 @@ public sealed class VoicePhrase
     static readonly double MaxEnrollCost = 1.6 * VoiceSettings.Threshold(VoiceSensitivity.Easy);
 
     public IReadOnlyList<float[][]> Templates { get; }
+    readonly PhraseMatcher.PreparedTemplates _preparedTemplates;
 
     /// <summary>How far each sample scores against the other samples' templates (the worst one): the user's own variation.</summary>
     public double Spread { get; }
@@ -19,6 +20,7 @@ public sealed class VoicePhrase
     VoicePhrase(List<float[][]> templates, double spread)
     {
         Templates = templates;
+        _preparedTemplates = PhraseMatcher.PrepareTemplates(templates);
         Spread = spread;
     }
 
@@ -41,7 +43,10 @@ public sealed class VoicePhrase
     }
 
     /// <summary>Matching cost of <paramref name="audio"/>; below the sensitivity threshold means the phrase was said.</summary>
-    public double Score(SpeechModels models, ReadOnlySpan<float> audio) => PhraseMatcher.Score(Templates, models.Embed(audio));
+    public double Score(SpeechModels models, ReadOnlySpan<float> audio) => Score(PhraseMatcher.PrepareQuery(models.Embed(audio)));
+
+    /// <summary>Scores the same prepared utterance against this phrase's cached templates.</summary>
+    public double Score(PhraseMatcher.PreparedQuery query) => PhraseMatcher.Score(_preparedTemplates, query);
 
     /// <summary>Whether <paramref name="sample"/> can join the enrollment: the right length and like the earlier samples.</summary>
     public static EnrollProblem Check(SpeechModels models, float[] sample, IReadOnlyList<float[]> earlier)

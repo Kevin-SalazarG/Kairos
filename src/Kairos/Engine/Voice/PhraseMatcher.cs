@@ -3,6 +3,40 @@ namespace Kairos.Engine.Voice;
 /// <summary>Compares sequences of speech embeddings with subsequence dynamic time warping.</summary>
 public static class PhraseMatcher
 {
+    /// <summary>A normalized copy of the recorded templates, reusable across utterances.</summary>
+    public sealed class PreparedTemplates
+    {
+        internal readonly float[][][] Sequences;
+
+        internal PreparedTemplates(IReadOnlyList<float[][]> templates)
+        {
+            Sequences = new float[templates.Count][][];
+            for (int i = 0; i < templates.Count; i++)
+                Sequences[i] = Normalize(templates[i]);
+        }
+    }
+
+    /// <summary>
+    /// One normalized utterance and its three alignment rows. Reuse it sequentially across phrases;
+    /// each listening worker prepares its own query rather than sharing a query between threads.
+    /// </summary>
+    public sealed class PreparedQuery
+    {
+        internal readonly float[][] Sequence;
+        internal readonly double[] First, Second, Third;
+
+        internal PreparedQuery(float[][] query)
+        {
+            Sequence = Normalize(query);
+            First = new double[query.Length];
+            Second = new double[query.Length];
+            Third = new double[query.Length];
+        }
+    }
+
+    public static PreparedTemplates PrepareTemplates(IReadOnlyList<float[][]> templates) => new(templates);
+    public static PreparedQuery PrepareQuery(float[][] query) => new(query);
+
     /// <summary>
     /// Cheapest cosine-distance alignment of the whole <paramref name="template"/> to any stretch of
     /// <paramref name="query"/>, divided by the template length. Steps (1,1), (1,2) and (2,1) allow speaking
@@ -14,11 +48,21 @@ public static class PhraseMatcher
         if (n == 0 || m < n / 2)
             return double.PositiveInfinity;
         var t = Normalize(template);
-        var q = Normalize(query);
+        return Cost(t, PrepareQuery(query));
+    }
 
-        var d = new double[n, m];
+    static double Cost(float[][] t, PreparedQuery query)
+    {
+        int n = t.Length, m = query.Sequence.Length;
+        if (n == 0 || m < n / 2)
+            return double.PositiveInfinity;
+        var q = query.Sequence;
+        var previous = query.First;
+        var current = query.Second;
+        var beforePrevious = query.Third;
+
         for (int j = 0; j < m; j++)
-            d[0, j] = Distance(t[0], q[j]);
+            previous[j] = Distance(t[0], q[j]);
         for (int i = 1; i < n; i++)
         {
             for (int j = 0; j < m; j++)
@@ -26,19 +70,20 @@ public static class PhraseMatcher
                 double best = double.PositiveInfinity;
                 if (j >= 1)
                 {
-                    best = Math.Min(best, d[i - 1, j - 1]);
+                    best = Math.Min(best, previous[j - 1]);
                     if (i >= 2)
-                        best = Math.Min(best, d[i - 2, j - 1]);
+                        best = Math.Min(best, beforePrevious[j - 1]);
                 }
                 if (j >= 2)
-                    best = Math.Min(best, d[i - 1, j - 2]);
-                d[i, j] = double.IsPositiveInfinity(best) ? best : best + Distance(t[i], q[j]);
+                    best = Math.Min(best, previous[j - 2]);
+                current[j] = double.IsPositiveInfinity(best) ? best : best + Distance(t[i], q[j]);
             }
+            (beforePrevious, previous, current) = (previous, current, beforePrevious);
         }
 
         double end = double.PositiveInfinity;
         for (int j = 0; j < m; j++)
-            end = Math.Min(end, d[n - 1, j]);
+            end = Math.Min(end, previous[j]);
         return end / n;
     }
 
@@ -46,7 +91,32 @@ public static class PhraseMatcher
     public static double Score(IReadOnlyList<float[][]> templates, float[][] query)
     {
         double first = double.PositiveInfinity, second = double.PositiveInfinity;
+        PreparedQuery? preparedQuery = null;
         foreach (var t in templates)
+        {
+            if (t.Length == 0 || query.Length < t.Length / 2)
+                continue;
+            var normalized = Normalize(t);
+            preparedQuery ??= PrepareQuery(query);
+            double c = Cost(normalized, preparedQuery);
+            if (c < first)
+            {
+                second = first;
+                first = c;
+            }
+            else if (c < second)
+            {
+                second = c;
+            }
+        }
+        return double.IsPositiveInfinity(second) ? first : (first + second) / 2;
+    }
+
+    /// <summary>Scores a saved phrase without normalizing its templates or allocating alignment matrices.</summary>
+    public static double Score(PreparedTemplates templates, PreparedQuery query)
+    {
+        double first = double.PositiveInfinity, second = double.PositiveInfinity;
+        foreach (var t in templates.Sequences)
         {
             double c = Cost(t, query);
             if (c < first)
@@ -75,7 +145,10 @@ public static class PhraseMatcher
             foreach (float v in seq[i])
                 norm += v * v;
             float scale = (float)(1 / (Math.Sqrt(norm) + 1e-6));
-            result[i] = [.. seq[i].Select(v => v * scale)];
+            var frame = new float[seq[i].Length];
+            for (int j = 0; j < frame.Length; j++)
+                frame[j] = seq[i][j] * scale;
+            result[i] = frame;
         }
         return result;
     }

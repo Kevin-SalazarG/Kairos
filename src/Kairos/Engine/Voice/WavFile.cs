@@ -8,45 +8,58 @@ public static class WavFile
     public static float[] Read(string path)
     {
         using var r = new BinaryReader(File.OpenRead(path));
-        if (new string(r.ReadChars(4)) != "RIFF")
-            throw new InvalidDataException("not a WAV file");
-        r.ReadInt32();
-        if (new string(r.ReadChars(4)) != "WAVE")
-            throw new InvalidDataException("not a WAV file");
-        short channels = 1, bits = 16;
-        int rate = SampleRate;
-        while (r.BaseStream.Position + 8 <= r.BaseStream.Length)
+        try
         {
-            string id = new(r.ReadChars(4));
-            int size = r.ReadInt32();
-            long next = r.BaseStream.Position + size + (size & 1);
-            if (id == "fmt ")
+            if (r.BaseStream.Length < 12 || r.ReadUInt32() != 0x46464952) // RIFF
+                throw new InvalidDataException("not a WAV file");
+            long end = r.ReadUInt32() + 8L;
+            if (r.ReadUInt32() != 0x45564157 || end < 12 || end > r.BaseStream.Length) // WAVE
+                throw new InvalidDataException("invalid WAV bounds");
+            int channels = 0, blockAlign = 0;
+            while (r.BaseStream.Position < end)
             {
-                r.ReadInt16();
-                channels = r.ReadInt16();
-                rate = r.ReadInt32();
-                r.ReadInt32();
-                r.ReadInt16();
-                bits = r.ReadInt16();
-            }
-            else if (id == "data")
-            {
-                if (bits != 16 || rate != SampleRate)
-                    throw new InvalidDataException($"expected 16-bit {SampleRate} Hz, got {bits}-bit {rate} Hz");
-                int frames = size / 2 / channels;
-                var samples = new float[frames];
-                for (int i = 0; i < frames; i++)
+                if (end - r.BaseStream.Position < 8)
+                    throw new InvalidDataException("truncated WAV chunk header");
+                uint id = r.ReadUInt32(), size = r.ReadUInt32();
+                long next = r.BaseStream.Position + size + (size & 1);
+                if (next > end)
+                    throw new InvalidDataException("truncated WAV chunk");
+                if (id == 0x20746d66) // fmt
                 {
-                    int sum = 0;
-                    for (int c = 0; c < channels; c++)
-                        sum += r.ReadInt16();
-                    samples[i] = sum / (32768f * channels);
+                    if (size < 16 || channels != 0)
+                        throw new InvalidDataException("invalid WAV format chunk");
+                    int format = r.ReadUInt16();
+                    channels = r.ReadUInt16();
+                    uint rate = r.ReadUInt32(), byteRate = r.ReadUInt32();
+                    blockAlign = r.ReadUInt16();
+                    int bits = r.ReadUInt16();
+                    if (format != 1 || channels == 0 || bits != 16 || rate != SampleRate
+                        || blockAlign != channels * 2 || byteRate != rate * blockAlign)
+                        throw new InvalidDataException($"expected 16-bit {SampleRate} Hz PCM WAV");
                 }
-                return samples;
+                else if (id == 0x61746164) // data
+                {
+                    if (channels == 0 || size % blockAlign != 0 || size / blockAlign > Array.MaxLength)
+                        throw new InvalidDataException("invalid WAV sample bounds");
+                    int frames = (int)(size / blockAlign);
+                    var samples = new float[frames];
+                    for (int i = 0; i < frames; i++)
+                    {
+                        int sum = 0;
+                        for (int c = 0; c < channels; c++)
+                            sum += r.ReadInt16();
+                        samples[i] = sum / (32768f * channels);
+                    }
+                    return samples;
+                }
+                r.BaseStream.Position = next;
             }
-            r.BaseStream.Position = next;
+            throw new InvalidDataException("WAV file has no data");
         }
-        throw new InvalidDataException("WAV file has no data");
+        catch (EndOfStreamException e)
+        {
+            throw new InvalidDataException("truncated WAV file", e);
+        }
     }
 
     public static void Write(string path, ReadOnlySpan<float> samples)
