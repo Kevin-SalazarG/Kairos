@@ -6,18 +6,24 @@ public sealed class Resampler48To16
     const int Taps = 127;
     static readonly float[] Kernel = BuildKernel();
 
-    float[] _history = new float[Taps - 1];
+    readonly float[] _history = new float[Taps - 1];
+    float[] _buffer = [];
     int _next = Taps - 1;
 
     public float[] Process(ReadOnlySpan<float> input)
     {
-        var x = new float[_history.Length + input.Length];
+        // Reuse staging and history across libobs's short audio blocks. Only the returned samples
+        // need their own array: callers can keep them after the next block has been processed.
+        int length = _history.Length + input.Length;
+        if (_buffer.Length < length)
+            _buffer = new float[length];
+        var x = _buffer;
         _history.CopyTo(x, 0);
         input.CopyTo(x.AsSpan(_history.Length));
 
-        var output = new float[Math.Max(0, (x.Length - _next + 2) / 3)];
+        var output = new float[Math.Max(0, (length - _next + 2) / 3)];
         int count = 0, p = _next;
-        for (; p < x.Length; p += 3)
+        for (; p < length; p += 3)
         {
             float acc = 0;
             for (int k = 0; k < Taps; k++)
@@ -25,7 +31,7 @@ public sealed class Resampler48To16
             output[count++] = acc;
         }
         _next = p - input.Length;
-        _history = x[^(Taps - 1)..];
+        x.AsSpan(length - _history.Length, _history.Length).CopyTo(_history);
         return count == output.Length ? output : output[..count];
     }
 
