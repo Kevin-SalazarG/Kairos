@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Windows.Input;
@@ -6,6 +7,7 @@ using System.Windows.Threading;
 using Kairos.App;
 using Kairos.Engine;
 using Kairos.Engine.Captions;
+using Kairos.Engine.Voice;
 using Kairos.Settings;
 using CaptureMode = Kairos.Settings.CaptureMode;
 
@@ -60,6 +62,20 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         Track(nameof(VoiceLastMatch), static vm => vm.VoiceLastMatch),
         Track(nameof(VoiceStrength), static vm => vm.VoiceStrength),
         Track(nameof(VoiceNote), static vm => vm.VoiceNote),
+        Track(nameof(VoiceBusy), static vm => vm.VoiceBusy),
+        Track(nameof(VoiceCanEdit), static vm => vm.VoiceCanEdit),
+        Track(nameof(VoiceCanChangeSettings), static vm => vm.VoiceCanChangeSettings),
+        Track(nameof(VoiceEnrolling), static vm => vm.VoiceEnrolling),
+        Track(nameof(VoiceTesting), static vm => vm.VoiceTesting),
+        Track(nameof(VoiceSessionVisible), static vm => vm.VoiceSessionVisible),
+        Track(nameof(VoiceSavedNote), static vm => vm.VoiceSavedNote),
+        Track(nameof(VoiceSessionTitle), static vm => vm.VoiceSessionTitle),
+        Track(nameof(VoiceClipListTitle), static vm => vm.VoiceClipListTitle),
+        Track(nameof(VoiceShotListTitle), static vm => vm.VoiceShotListTitle),
+        Track(nameof(VoiceClipEmpty), static vm => vm.VoiceClipEmpty),
+        Track(nameof(VoiceShotEmpty), static vm => vm.VoiceShotEmpty),
+        Track(nameof(VoiceClipCanAdd), static vm => vm.VoiceClipCanAdd),
+        Track(nameof(VoiceShotCanAdd), static vm => vm.VoiceShotCanAdd),
     ];
 
     static StatusNotification<SettingsViewModel> Track<T>(string name, Func<SettingsViewModel, T> read) =>
@@ -127,6 +143,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         VoiceDeleteCommand = new RelayCommand(_ => VoiceCommand("voice-delete"));
         VoiceRecordShotCommand = new RelayCommand(_ => VoiceCommand("voice-enroll-shot"));
         VoiceDeleteShotCommand = new RelayCommand(_ => VoiceCommand("voice-delete-shot"));
+        VoiceAddClipCommand = new RelayCommand(_ => AddVoicePhrase("clip"), _ => VoiceClipCanAdd && !string.IsNullOrWhiteSpace(NewVoiceClipName));
+        VoiceAddShotCommand = new RelayCommand(_ => AddVoicePhrase("shot"), _ => VoiceShotCanAdd && !string.IsNullOrWhiteSpace(NewVoiceShotName));
         ScreenshotCommand = new RelayCommand(_ => SendAsync("screenshot"));
         ResetHotkeysCommand = new RelayCommand(_ => ResetHotkeys());
         foreach (var state in KeyStates)
@@ -141,11 +159,15 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public void Start()
     {
-        if (_started)
-            return;
-        _started = true;
-        _stopped = false;
-        _lifetime++;
+        lock (_voiceRequestGate)
+        {
+            if (_started)
+                return;
+            _started = true;
+            _stopped = false;
+            _lifetime++;
+            _voiceRequest = null;
+        }
         _polling = false;
         _capsLoading = false;
         // A request issued before this run cannot publish its image in the new generation.
@@ -162,11 +184,24 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public void Stop()
     {
-        _started = false;
-        _stopped = true;
-        _lifetime++;
-        if (VoiceView is "enrolling" or "testing")
-            PipeClient.Send("voice-cancel", 800);
+        Task? cancellation = null;
+        lock (_voiceRequestGate)
+        {
+            if (_stopped)
+                return;
+            _started = false;
+            _stopped = true;
+            _lifetime++;
+            bool active = VoiceEnrolling || VoiceTesting || (_voiceCommandPending && _voiceRequest?.NeedsMicrophone == true);
+            if (active)
+            {
+                _voiceRequest ??= VoiceRequestState.Completed(_lifetime - 1);
+                cancellation = EnsureVoiceCancellation(_voiceRequest, closing: true);
+            }
+            _voiceCommandPending = false;
+        }
+        if (cancellation != null)
+            TrackVoiceRequest(cancellation);
         _poll.Stop();
         _messageTimer.Stop();
         _reloadDelay.Stop();
@@ -236,6 +271,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public void Seed(StatusDto? status, CapsDto? caps)
     {
         _status = status;
+        SyncVoicePhrases();
         UpdateLatestPictures();
         RefreshKeyStates();
         SetCaps(caps);
@@ -253,6 +289,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     /// <summary>The engine's status changed; the update bar only when the update did.</summary>
     void RaiseStatus()
     {
+        SyncVoicePhrases();
         foreach (var notification in _statusNotifications)
             if (notification.ReadChanged(this) is { } changed)
                 PropertyChanged?.Invoke(this, changed);
@@ -880,6 +917,245 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     Engine.Voice.VoiceStatus? Voice => _status?.Voice;
     string _voiceNote = "";
+    bool _voiceCommandPending;
+    readonly object _voiceRequestGate = new();
+    VoiceRequestState? _voiceRequest;
+    Task _voiceRequests = Task.CompletedTask;
+
+    sealed class VoiceRequestState(int lifetime, bool needsMicrophone)
+    {
+        public int Lifetime { get; } = lifetime;
+        public bool NeedsMicrophone { get; } = needsMicrophone;
+        public TaskCompletionSource Reply { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task? Cancellation { get; set; }
+        public bool Closing { get; set; }
+
+        public static VoiceRequestState Completed(int lifetime)
+        {
+            var state = new VoiceRequestState(lifetime, false);
+            state.Reply.SetResult();
+            return state;
+        }
+    }
+    bool? _voiceEditableShown;
+    string _newVoiceClipName = "", _newVoiceShotName = "";
+
+    public ObservableCollection<VoicePhraseRowViewModel> VoiceClipPhrases { get; } = [];
+    public ObservableCollection<VoicePhraseRowViewModel> VoiceShotPhrases { get; } = [];
+    public string NewVoiceClipName
+    {
+        get => _newVoiceClipName;
+        set { _newVoiceClipName = value ?? ""; Raise(nameof(NewVoiceClipName)); CommandManager.InvalidateRequerySuggested(); }
+    }
+    public string NewVoiceShotName
+    {
+        get => _newVoiceShotName;
+        set { _newVoiceShotName = value ?? ""; Raise(nameof(NewVoiceShotName)); CommandManager.InvalidateRequerySuggested(); }
+    }
+    public bool VoiceEnrolling => Voice?.Mode == "enrolling";
+    public bool VoiceTesting => Voice?.Mode == "testing";
+    public bool VoiceSessionVisible => VoiceEnrolling || VoiceTesting;
+    public string VoiceSavedNote => Voice?.Message == "voice.enrolled" ? Text.Get("voice.enrolled") : "";
+    public bool VoiceBusy => _voiceCommandPending || VoiceEnrolling || VoiceTesting;
+    public bool VoiceCanEdit => !VoiceBusy && _status != null;
+    public bool VoiceCanChangeSettings => !VoiceBusy;
+    public bool VoiceClipEmpty => VoiceClipPhrases.Count == 0;
+    public bool VoiceShotEmpty => VoiceShotPhrases.Count == 0;
+    int VoicePhraseLimit => Voice?.MaxPhrasesPerAction ?? 5;
+    public bool VoiceClipCanAdd => VoiceCanEdit && VoiceClipPhrases.Count < VoicePhraseLimit;
+    public bool VoiceShotCanAdd => VoiceCanEdit && VoiceShotPhrases.Count < VoicePhraseLimit;
+    public string VoiceClipListTitle => Text.Format("voice.clipList", VoiceClipPhrases.Count, VoicePhraseLimit);
+    public string VoiceShotListTitle => Text.Format("voice.shotList", VoiceShotPhrases.Count, VoicePhraseLimit);
+    public string VoiceSessionTitle => Text.Format(VoiceEnrolling ? "voice.trainingPhrase" : "voice.testingPhrase",
+        Voice?.ActivePhraseName ?? Text.Get(Voice?.EnrollingFor == "shot" ? "voice.shotPhrase" : "voice.phrase"));
+
+    void SyncVoicePhrases()
+    {
+        // Keep the same rows, bindings and unsaved names across the 500 ms status updates.
+        if (!_voiceCommandPending && Voice?.Phrases is { } phrases)
+        {
+            SyncRows(VoiceClipPhrases, "clip", phrases);
+            SyncRows(VoiceShotPhrases, "shot", phrases);
+        }
+        bool editable = VoiceCanEdit;
+        if (_voiceEditableShown == editable)
+            return;
+        _voiceEditableShown = editable;
+        foreach (var row in VoiceClipPhrases)
+            row.RefreshCommands();
+        foreach (var row in VoiceShotPhrases)
+            row.RefreshCommands();
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    void SyncRows(ObservableCollection<VoicePhraseRowViewModel> rows, string action, IReadOnlyList<VoicePhraseInfo> phrases)
+    {
+        for (int i = rows.Count - 1; i >= 0; i--)
+        {
+            bool exists = false;
+            for (int p = 0; p < phrases.Count; p++)
+                if (phrases[p].Action == action && phrases[p].Id == rows[i].Id)
+                { exists = true; break; }
+            if (!exists)
+                rows.RemoveAt(i);
+        }
+        int index = 0;
+        for (int p = 0; p < phrases.Count; p++)
+        {
+            var phrase = phrases[p];
+            if (phrase.Action != action)
+                continue;
+            int existing = -1;
+            for (int i = index; i < rows.Count; i++)
+                if (rows[i].Id == phrase.Id)
+                { existing = i; break; }
+            if (existing < 0)
+                rows.Insert(index, new VoicePhraseRowViewModel(phrase, () => VoiceCanEdit, command => _ = SendVoicePhraseAsync(command)));
+            else
+            {
+                if (existing != index)
+                    rows.Move(existing, index);
+                rows[index].Update(phrase);
+            }
+            index++;
+        }
+    }
+
+    void AddVoicePhrase(string action)
+    {
+        if (!(action == "shot" ? VoiceShotCanAdd : VoiceClipCanAdd))
+            return;
+        string name = (action == "shot" ? NewVoiceShotName : NewVoiceClipName).Trim();
+        _ = SendVoicePhraseAsync(new VoicePhraseCommand("enroll", Action: action, Name: name));
+    }
+
+    internal Task SendVoicePhraseAsync(VoicePhraseCommand command) => TrackVoiceRequest(
+        SendVoiceRequestAsync("voice-phrase " + JsonSerializer.Serialize(command, Ipc.Json),
+            command.Operation is "enroll" or "rerecord" or "test"));
+
+    Task TrackVoiceRequest(Task request)
+    {
+        _voiceRequests = _voiceRequests.IsCompleted ? request : Task.WhenAll(_voiceRequests, request);
+        return request;
+    }
+
+    /// <summary>Called after the window loop exits so a late microphone request can finish cancelling.</summary>
+    internal Task FinishVoiceRequestsAsync() => _voiceRequests;
+
+    async Task SendVoiceRequestAsync(string command, bool needsMicrophone)
+    {
+        if (_stopped)
+            return;
+        if (command == "voice-cancel")
+        {
+            Task cancellation;
+            lock (_voiceRequestGate)
+            {
+                _voiceRequest ??= VoiceRequestState.Completed(_lifetime);
+                cancellation = EnsureVoiceCancellation(_voiceRequest, closing: false);
+                _voiceCommandPending = true;
+            }
+            RaiseStatus();
+            await cancellation.ConfigureAwait(false);
+            return;
+        }
+        if (_voiceCommandPending)
+            return;
+        _voiceNote = _status == null ? Text.Get("voice.err.engine")
+            : needsMicrophone && Voice?.ModelsFound == false ? Text.Get("voice.err.files")
+            : needsMicrophone && Voice?.Available != true ? Text.Get("voice.err.noMic") : "";
+        Raise(nameof(VoiceNote));
+        if (_voiceNote.Length > 0)
+            return;
+        int lifetime = _lifetime;
+        var state = new VoiceRequestState(lifetime, needsMicrophone);
+        lock (_voiceRequestGate)
+            _voiceRequest = state;
+        _voiceCommandPending = true;
+        RaiseStatus();
+        string? reply;
+        try { reply = await RequestAsync(command, 3000).ConfigureAwait(false); }
+        catch { reply = null; }
+        state.Reply.TrySetResult();
+        PostIfCurrent(lifetime, () =>
+        {
+            lock (_voiceRequestGate)
+                if (!ReferenceEquals(_voiceRequest, state) || state.Cancellation != null)
+                    return;
+            _voiceCommandPending = false;
+            _voiceNote = VoiceReplyProblem(reply);
+            if (_voiceNote.Length == 0 && reply != null)
+                TryParseStatus(reply);
+            RaiseStatus();
+        });
+    }
+
+    Task EnsureVoiceCancellation(VoiceRequestState state, bool closing)
+    {
+        // Called under the gate: every request owns exactly one cancellation, including the gap
+        // between its transport reply and the queued UI callback that displays that reply.
+        state.Closing |= closing;
+        return state.Cancellation ??= CancelVoiceAfterReplyAsync(state);
+    }
+
+    async Task CancelVoiceAfterReplyAsync(VoiceRequestState state)
+    {
+        await state.Reply.Task.ConfigureAwait(false);
+        Task<string?>? request = null;
+        lock (_voiceRequestGate)
+        {
+            bool current = !_stopped && _lifetime == state.Lifetime && ReferenceEquals(_voiceRequest, state);
+            bool closed = state.Closing && _stopped && _lifetime == state.Lifetime + 1;
+            if (current || closed)
+            {
+                try { request = RequestAsync("voice-cancel", 800); }
+                catch { request = Task.FromResult<string?>(null); }
+            }
+        }
+        if (request == null)
+            return;
+        string? reply;
+        try { reply = await request.ConfigureAwait(false); }
+        catch { reply = null; }
+        PostIfCurrent(state.Lifetime, () =>
+        {
+            lock (_voiceRequestGate)
+            {
+                if (!ReferenceEquals(_voiceRequest, state))
+                    return;
+                _voiceRequest = null;
+            }
+            _voiceCommandPending = false;
+            _voiceNote = VoiceReplyProblem(reply);
+            if (_voiceNote.Length == 0 && reply != null)
+                TryParseStatus(reply);
+            RaiseStatus();
+        });
+    }
+
+    static string VoiceReplyProblem(string? reply)
+    {
+        if (reply == null)
+            return Text.Get("voice.err.engine");
+        try
+        {
+            using var doc = JsonDocument.Parse(reply);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                return Text.Get("voice.err.command");
+            // Status.Error is a capture error; only a standalone IPC error rejects the phrase edit.
+            if (root.TryGetProperty("hotkeys", out _))
+                return "";
+            if (root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.String)
+            {
+                string key = error.GetString() ?? "";
+                return key.StartsWith("voice.err.", StringComparison.Ordinal) && Text.Get(key) != key
+                    ? Text.Get(key) : Text.Get("voice.err.command");
+            }
+        }
+        catch (JsonException) { }
+        return Text.Get("voice.err.command");
+    }
 
     /// <summary>
     /// The card a test was started from ("clip" or "shot"): it shows the test. A test listens for both phrases and
@@ -918,10 +1194,13 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public bool VoiceDone3 => Voice?.Samples >= 3;
     public string VoiceMessage => Voice?.Message is { } key && key.StartsWith("voice.err.") ? Text.Get(key) : "";
     public string VoiceResult => Voice?.LastScore == null ? ""
-        : Text.Get(!Voice.LastMatch ? "voice.notMatched" : Voice.LastPhrase == "shot" ? "voice.matchedShot" : "voice.matchedClip");
+        : !Voice.LastMatch ? Text.Get(Voice.Message == "voice.err.ambiguous" ? "voice.err.ambiguous" : "voice.notMatched")
+        : Voice.LastPhraseName is { Length: > 0 } name ? Text.Format("voice.matchedName", name)
+        : Text.Get(Voice.LastPhrase == "shot" ? "voice.matchedShot" : "voice.matchedClip");
     public bool VoiceLastMatch => Voice?.LastMatch == true;
     public double VoiceStrength => Voice is { LastScore: double score } v ? Engine.Voice.PhraseMatcher.Strength(score, v.Threshold) : 0;
-    public string VoiceNote => _voiceNote;
+    public string VoiceNote => _voiceNote.Length > 0 ? _voiceNote
+        : !VoiceSessionVisible && Voice?.Message is { } key && key.StartsWith("voice.err.", StringComparison.Ordinal) ? Text.Get(key) : "";
 
     public ICommand VoiceRecordCommand { get; }
     public ICommand VoiceTestCommand { get; }
@@ -930,19 +1209,15 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public ICommand VoiceDeleteCommand { get; }
     public ICommand VoiceRecordShotCommand { get; }
     public ICommand VoiceDeleteShotCommand { get; }
+    public ICommand VoiceAddClipCommand { get; }
+    public ICommand VoiceAddShotCommand { get; }
     public ICommand ScreenshotCommand { get; }
     public ICommand VoiceSetUpCommand { get; }
     public ICommand VoiceDismissHintCommand { get; }
 
     void VoiceCommand(string command)
     {
-        _voiceNote = _status == null ? Text.Get("voice.err.engine")
-            : Voice?.ModelsFound == false && command is "voice-enroll" or "voice-enroll-shot" or "voice-test" ? Text.Get("voice.err.files")
-            : Voice?.Available != true && command is "voice-enroll" or "voice-enroll-shot" or "voice-test" ? Text.Get("voice.err.noMic")
-            : "";
-        Raise(nameof(VoiceNote));
-        if (_voiceNote.Length == 0)
-            SendAsync(command);
+        _ = TrackVoiceRequest(SendVoiceRequestAsync(command, command is "voice-enroll" or "voice-enroll-shot" or "voice-test"));
     }
 
     /// <summary>The share panel's last choices.</summary>
@@ -1151,7 +1426,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             LoadCapsAsync();
         RefreshKeyStates();
         RaiseStatus();
-        _poll.Interval = TimeSpan.FromMilliseconds(VoiceView is "enrolling" or "testing" ? 200 : 500);
+        _poll.Interval = TimeSpan.FromMilliseconds(VoiceEnrolling || VoiceTesting ? 200 : 500);
     }
 
     void TryParseStatus(string json)

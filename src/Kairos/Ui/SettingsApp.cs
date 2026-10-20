@@ -100,6 +100,9 @@ public static partial class SettingsApp
             }
         });
         app.Run();
+        // The window is gone, but an enrollment request may still be reaching the engine.
+        // Let its bounded IPC cleanup cancel it before this settings process exits.
+        vm.FinishVoiceRequestsAsync().GetAwaiter().GetResult();
         // The window closed: a save still running stops and removes its part file before the process ends.
         window?.FinishEdits();
         GC.KeepAlive(mutex);

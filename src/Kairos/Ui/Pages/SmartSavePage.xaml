@@ -3,93 +3,35 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:l="clr-namespace:Kairos.Ui">
     <UserControl.Resources>
-        <!-- Recording a phrase (either one): three dots, the step, the microphone level and what went wrong -->
-        <DataTemplate x:Key="Enrolling">
-    <StackPanel>
+        <DataTemplate x:Key="PhraseRow">
+            <Border BorderBrush="{StaticResource Stroke}" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,10">
+                <StackPanel IsEnabled="{Binding CanEdit}">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Ellipse Width="10" Height="10" Margin="0,0,6,0">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="{StaticResource StrokeStrong}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding VoiceDone1}" Value="True"><Setter Property="Fill" Value="{DynamicResource Accent}"/></DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
-                            <Ellipse Width="10" Height="10" Margin="0,0,6,0">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="{StaticResource StrokeStrong}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding VoiceDone2}" Value="True"><Setter Property="Fill" Value="{DynamicResource Accent}"/></DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
-                            <Ellipse Width="10" Height="10" Margin="0,0,14,0">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="{StaticResource StrokeStrong}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding VoiceDone3}" Value="True"><Setter Property="Fill" Value="{DynamicResource Accent}"/></DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
-                            <TextBlock Style="{StaticResource Label}" FontSize="16" FontWeight="SemiBold" Text="{Binding VoiceStep}"/>
-                        </StackPanel>
-                        <Button Grid.Column="1" Style="{StaticResource Ghost}" Content="{l:T voice.cancel}" Command="{Binding VoiceCancelCommand}"/>
+                        <TextBox Text="{Binding DraftName, UpdateSourceTrigger=PropertyChanged}" MaxLength="60" MinWidth="80"
+                                 Padding="10,7" VerticalContentAlignment="Center" AutomationProperties.Name="{l:T voice.nameLabel}"/>
+                        <CheckBox Grid.Column="1" Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" Margin="14,0,0,0"
+                                  VerticalAlignment="Center" ToolTip="{l:T voice.active}" AutomationProperties.Name="{l:T voice.active}"/>
                     </Grid>
-                    <l:LevelBar Channel="mic" Margin="0,16,0,0" AutomationProperties.Name="{l:T audio.level}"/>
-                    <TextBlock Text="{Binding VoiceMessage}" Foreground="{StaticResource Warning}" Margin="0,12,0,0" TextWrapping="Wrap"
-                               Visibility="{Binding VoiceMessage, Converter={StaticResource Vis}}"/>
+                    <WrapPanel Margin="0,9,0,-3">
+                        <Button Style="{StaticResource Primary}" Content="{l:T voice.test}" Command="{Binding TestCommand}" Margin="0,0,8,3"/>
+                        <Button Style="{StaticResource Ghost}" Content="{l:T voice.recordAgain}" Command="{Binding RerecordCommand}" Margin="0,0,8,3"/>
+                        <Button Style="{StaticResource Ghost}" Content="{l:T voice.saveName}" Command="{Binding RenameCommand}" Margin="0,0,8,3"
+                                Visibility="{Binding NameChanged, Converter={StaticResource Vis}}"/>
+                        <Button Style="{StaticResource Ghost}" Command="{Binding DeleteCommand}" Padding="11,9" Margin="0,0,0,3"
+                                ToolTip="{l:T voice.delete}" AutomationProperties.Name="{l:T voice.delete}">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE74D;" FontSize="13"/>
+                        </Button>
+                    </WrapPanel>
                 </StackPanel>
-        </DataTemplate>
-        <!-- Testing (from either card): say a phrase, see which one matched and how strongly -->
-        <DataTemplate x:Key="Testing">
-    <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource Label}" FontSize="16" FontWeight="SemiBold" Text="{l:T voice.testing}" VerticalAlignment="Center"/>
-                        <Button Grid.Column="1" Style="{StaticResource Ghost}" Content="{l:T voice.done}" Command="{Binding VoiceCancelCommand}"/>
-                    </Grid>
-                    <l:LevelBar Channel="mic" Margin="0,16,0,0" AutomationProperties.Name="{l:T audio.level}"/>
-                    <Grid Margin="0,16,0,0" Visibility="{Binding VoiceResult, Converter={StaticResource Vis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="{Binding VoiceResult}" FontWeight="SemiBold" VerticalAlignment="Center">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding VoiceLastMatch}" Value="True"><Setter Property="Foreground" Value="{StaticResource Success}"/></DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                        <ProgressBar Grid.Column="1" Height="6" Minimum="0" Maximum="1" Value="{Binding VoiceStrength, Mode=OneWay}" Margin="16,0"
-                                     Foreground="{DynamicResource Accent}" Background="{StaticResource Stroke}" BorderThickness="0" VerticalAlignment="Center"
-                                     AutomationProperties.Name="{l:T voice.strength}"/>
-                        <TextBlock Grid.Column="2" Style="{StaticResource Caption}" Text="{l:T voice.strength}" VerticalAlignment="Center"/>
-                    </Grid>
-                </StackPanel>
+            </Border>
         </DataTemplate>
     </UserControl.Resources>
     <StackPanel>
         <TextBlock Style="{StaticResource Title}" Text="{l:T nav.voice}"/>
-
         <Border Style="{StaticResource Card}">
             <StackPanel>
                 <Grid>
@@ -98,130 +40,102 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource Icon}" Text="&#xE720;" FontSize="18" Foreground="{DynamicResource Accent}" Margin="0,0,12,0"/>
-                    <TextBlock Grid.Column="1" Style="{StaticResource Section}" Text="{l:T voice.enable}" VerticalAlignment="Center"/>
-                    <CheckBox Grid.Column="2" Style="{StaticResource Switch}" IsChecked="{Binding VoiceEnabled}" AutomationProperties.Name="{l:T voice.enable}"/>
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE720;" FontSize="18" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Style="{StaticResource Section}" Text="{l:T voice.enable}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                    <CheckBox Grid.Column="2" Style="{StaticResource Switch}" IsChecked="{Binding VoiceEnabled}" Margin="12,0,0,0"
+                              IsEnabled="{Binding VoiceCanChangeSettings}" AutomationProperties.Name="{l:T voice.enable}"/>
                 </Grid>
                 <TextBlock Style="{StaticResource Caption}" Text="{l:T voice.enableTip}" Margin="30,8,0,0" TextWrapping="Wrap"/>
-            </StackPanel>
-        </Border>
-
-        <Border Style="{StaticResource Card}">
-            <StackPanel>
-                <TextBlock Style="{StaticResource Section}" Text="{l:T voice.phrase}"/>
-
-                <!-- No phrase yet -->
-                <Grid Margin="0,14,0,0" Visibility="{Binding VoiceView, Converter={StaticResource EqVis}, ConverterParameter=none}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Style="{StaticResource Label}" Text="{l:T voice.none}"/>
-                        <TextBlock Style="{StaticResource Caption}" Text="{l:T voice.noneTip}" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                    </StackPanel>
-                    <Button Grid.Column="1" Style="{StaticResource Ghost}" Content="{l:T voice.record}" Command="{Binding VoiceRecordCommand}"
-                            Margin="16,0,0,0" VerticalAlignment="Center"/>
-                </Grid>
-
-                <!-- Phrase ready -->
-                <Grid Margin="0,14,0,0" Visibility="{Binding VoiceView, Converter={StaticResource EqVis}, ConverterParameter=ready}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <Border Width="28" Height="28" CornerRadius="14" Background="{StaticResource SuccessSoft}" VerticalAlignment="Center">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE73E;" FontSize="13" Foreground="{StaticResource Success}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <TextBlock Grid.Column="1" Style="{StaticResource Label}" Text="{l:T voice.ready}" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                    <StackPanel Grid.Column="2" Orientation="Horizontal">
-                        <Button Style="{StaticResource Primary}" Content="{l:T voice.test}" Command="{Binding VoiceTestCommand}"/>
-                        <Button Style="{StaticResource Ghost}" Content="{l:T voice.recordAgain}" Command="{Binding VoiceRecordCommand}" Margin="8,0,0,0"/>
-                        <Button Style="{StaticResource Ghost}" Command="{Binding VoiceDeleteCommand}" Margin="8,0,0,0" Padding="11,9"
-                                ToolTip="{l:T voice.delete}" AutomationProperties.Name="{l:T voice.delete}">
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE74D;" FontSize="13"/>
-                        </Button>
-                    </StackPanel>
-                </Grid>
-
-                <!-- Recording the phrase -->
-                <ContentControl Margin="0,14,0,0" Content="{Binding}" ContentTemplate="{StaticResource Enrolling}" Focusable="False"
-                                Visibility="{Binding VoiceView, Converter={StaticResource EqVis}, ConverterParameter=enrolling}"/>
-
-                <!-- Testing -->
-                <ContentControl Margin="0,14,0,0" Content="{Binding}" ContentTemplate="{StaticResource Testing}" Focusable="False"
-                                Visibility="{Binding VoiceView, Converter={StaticResource EqVis}, ConverterParameter=testing}"/>
-
+                <TextBlock Style="{StaticResource Caption}" Text="{l:T voice.listTip}" Margin="0,14,0,0" TextWrapping="Wrap"/>
+                <TextBlock Style="{StaticResource Caption}" Text="{l:T voice.immediateTip}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                 <TextBlock Text="{Binding VoiceNote}" Foreground="{StaticResource Warning}" Margin="0,12,0,0" TextWrapping="Wrap"
                            Visibility="{Binding VoiceNote, Converter={StaticResource Vis}}"/>
+                <TextBlock Text="{Binding VoiceSavedNote}" Foreground="{StaticResource Success}" Margin="0,12,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding VoiceSavedNote, Converter={StaticResource Vis}}"/>
             </StackPanel>
         </Border>
-
-        <!-- The second phrase: takes a screenshot instead of saving a clip -->
-        <Border Style="{StaticResource Card}">
-            <StackPanel>
-                <TextBlock Style="{StaticResource Section}" Text="{l:T voice.shotPhrase}"/>
-
-                <Grid Margin="0,14,0,0" Visibility="{Binding ShotView, Converter={StaticResource EqVis}, ConverterParameter=none}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Style="{StaticResource Label}" Text="{l:T voice.shotNone}"/>
-                        <TextBlock Style="{StaticResource Caption}" Text="{l:T voice.shotNoneTip}" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                    </StackPanel>
-                    <Button Grid.Column="1" Style="{StaticResource Ghost}" Content="{l:T voice.record}" Command="{Binding VoiceRecordShotCommand}"
-                            Margin="16,0,0,0" VerticalAlignment="Center"/>
-                </Grid>
-
-                <Grid Margin="0,14,0,0" Visibility="{Binding ShotView, Converter={StaticResource EqVis}, ConverterParameter=ready}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <Border Width="28" Height="28" CornerRadius="14" Background="{StaticResource SuccessSoft}" VerticalAlignment="Center">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE73E;" FontSize="13" Foreground="{StaticResource Success}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <TextBlock Grid.Column="1" Style="{StaticResource Label}" Text="{l:T voice.shotReady}" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                    <StackPanel Grid.Column="2" Orientation="Horizontal">
-                        <Button Style="{StaticResource Primary}" Content="{l:T voice.test}" Command="{Binding VoiceTestShotCommand}"/>
-                        <Button Style="{StaticResource Ghost}" Content="{l:T voice.recordAgain}" Command="{Binding VoiceRecordShotCommand}" Margin="8,0,0,0"/>
-                        <Button Style="{StaticResource Ghost}" Command="{Binding VoiceDeleteShotCommand}" Margin="8,0,0,0" Padding="11,9"
-                                ToolTip="{l:T voice.delete}" AutomationProperties.Name="{l:T voice.delete}">
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE74D;" FontSize="13"/>
-                        </Button>
-                    </StackPanel>
-                </Grid>
-
-                <ContentControl Margin="0,14,0,0" Content="{Binding}" ContentTemplate="{StaticResource Enrolling}" Focusable="False"
-                                Visibility="{Binding ShotView, Converter={StaticResource EqVis}, ConverterParameter=enrolling}"/>
-                <ContentControl Margin="0,14,0,0" Content="{Binding}" ContentTemplate="{StaticResource Testing}" Focusable="False"
-                                Visibility="{Binding ShotView, Converter={StaticResource EqVis}, ConverterParameter=testing}"/>
-            </StackPanel>
-        </Border>
-
-        <Border Style="{StaticResource Card}">
+        <Border Style="{StaticResource Card}" Visibility="{Binding VoiceSessionVisible, Converter={StaticResource Vis}}">
             <StackPanel>
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource Label}" Text="{l:T voice.sensitivity}"/>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <RadioButton Style="{StaticResource Segment}" GroupName="vs" Content="{l:T voice.strict}"
-                                     IsChecked="{Binding VoiceSensitivity, Converter={StaticResource Eq}, ConverterParameter=Strict}"/>
-                        <RadioButton Style="{StaticResource Segment}" GroupName="vs" Content="{l:T voice.normal}"
-                                     IsChecked="{Binding VoiceSensitivity, Converter={StaticResource Eq}, ConverterParameter=Normal}"/>
-                        <RadioButton Style="{StaticResource Segment}" GroupName="vs" Content="{l:T voice.easy}" Margin="0"
-                                     IsChecked="{Binding VoiceSensitivity, Converter={StaticResource Eq}, ConverterParameter=Easy}"/>
-                    </StackPanel>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Section}" Text="{Binding VoiceSessionTitle}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Style="{StaticResource Ghost}" Content="{l:T voice.cancel}" Command="{Binding VoiceCancelCommand}" Margin="12,0,0,0"/>
                 </Grid>
+                <StackPanel Visibility="{Binding VoiceEnrolling, Converter={StaticResource Vis}}" Margin="0,14,0,0">
+                    <WrapPanel VerticalAlignment="Center">
+                        <CheckBox IsChecked="{Binding VoiceDone1, Mode=OneWay}" IsHitTestVisible="False" Focusable="False" Content="1" Margin="0,0,12,0"/>
+                        <CheckBox IsChecked="{Binding VoiceDone2, Mode=OneWay}" IsHitTestVisible="False" Focusable="False" Content="2" Margin="0,0,12,0"/>
+                        <CheckBox IsChecked="{Binding VoiceDone3, Mode=OneWay}" IsHitTestVisible="False" Focusable="False" Content="3" Margin="0,0,12,0"/>
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource Label}" Text="{Binding VoiceStep}" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                    <TextBlock Style="{StaticResource Caption}" Text="{l:T voice.trainingTip}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+                <TextBlock Style="{StaticResource Label}" Text="{l:T voice.testing}" Margin="0,14,0,0"
+                           Visibility="{Binding VoiceTesting, Converter={StaticResource Vis}}"/>
+                <l:LevelBar Channel="mic" Margin="0,14,0,0" AutomationProperties.Name="{l:T audio.level}"/>
+                <TextBlock Text="{Binding VoiceMessage}" Foreground="{StaticResource Warning}" Margin="0,12,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding VoiceMessage, Converter={StaticResource Vis}}"/>
+                <StackPanel Margin="0,14,0,0" Visibility="{Binding VoiceTesting, Converter={StaticResource Vis}}">
+                    <TextBlock Text="{Binding VoiceResult}" FontWeight="SemiBold" TextWrapping="Wrap">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding VoiceLastMatch}" Value="True"><Setter Property="Foreground" Value="{StaticResource Success}"/></DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding VoiceStrength, Mode=OneWay}" Margin="0,10,0,0"
+                                 Foreground="{DynamicResource Accent}" Background="{StaticResource Stroke}" BorderThickness="0"
+                                 AutomationProperties.Name="{l:T voice.strength}"/>
+                    <TextBlock Style="{StaticResource Caption}" Text="{l:T voice.strength}" Margin="0,5,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource Section}" Text="{Binding VoiceClipListTitle}"/>
+                <TextBlock Style="{StaticResource Caption}" Text="{l:T voice.clipEmpty}" Margin="0,12,0,12" TextWrapping="Wrap"
+                           Visibility="{Binding VoiceClipEmpty, Converter={StaticResource Vis}}"/>
+                <ItemsControl ItemsSource="{Binding VoiceClipPhrases}" ItemTemplate="{StaticResource PhraseRow}" Margin="0,12,0,0"/>
+                <StackPanel IsEnabled="{Binding VoiceClipCanAdd}" Margin="0,4,0,0">
+                    <TextBlock Style="{StaticResource Label}" Text="{l:T voice.nameLabel}"/>
+                    <TextBox Text="{Binding NewVoiceClipName, UpdateSourceTrigger=PropertyChanged}" MaxLength="60" Padding="10,8" Margin="0,7,0,0"
+                             AutomationProperties.Name="{l:T voice.nameLabel}"/>
+                    <WrapPanel Margin="0,9,0,0">
+                        <Button Style="{StaticResource Ghost}" Content="{l:T voice.addRecord}" Command="{Binding VoiceAddClipCommand}"/>
+                    </WrapPanel>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource Section}" Text="{Binding VoiceShotListTitle}"/>
+                <TextBlock Style="{StaticResource Caption}" Text="{l:T voice.shotEmpty}" Margin="0,12,0,12" TextWrapping="Wrap"
+                           Visibility="{Binding VoiceShotEmpty, Converter={StaticResource Vis}}"/>
+                <ItemsControl ItemsSource="{Binding VoiceShotPhrases}" ItemTemplate="{StaticResource PhraseRow}" Margin="0,12,0,0"/>
+                <StackPanel IsEnabled="{Binding VoiceShotCanAdd}" Margin="0,4,0,0">
+                    <TextBlock Style="{StaticResource Label}" Text="{l:T voice.nameLabel}"/>
+                    <TextBox Text="{Binding NewVoiceShotName, UpdateSourceTrigger=PropertyChanged}" MaxLength="60" Padding="10,8" Margin="0,7,0,0"
+                             AutomationProperties.Name="{l:T voice.nameLabel}"/>
+                    <WrapPanel Margin="0,9,0,0">
+                        <Button Style="{StaticResource Ghost}" Content="{l:T voice.addRecord}" Command="{Binding VoiceAddShotCommand}"/>
+                    </WrapPanel>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+        <Border Style="{StaticResource Card}">
+            <StackPanel IsEnabled="{Binding VoiceCanChangeSettings}">
+                <TextBlock Style="{StaticResource Label}" Text="{l:T voice.sensitivity}"/>
+                <WrapPanel Margin="0,10,0,0">
+                    <RadioButton Style="{StaticResource Segment}" GroupName="vs" Content="{l:T voice.strict}"
+                                 IsChecked="{Binding VoiceSensitivity, Converter={StaticResource Eq}, ConverterParameter=Strict}"/>
+                    <RadioButton Style="{StaticResource Segment}" GroupName="vs" Content="{l:T voice.normal}"
+                                 IsChecked="{Binding VoiceSensitivity, Converter={StaticResource Eq}, ConverterParameter=Normal}"/>
+                    <RadioButton Style="{StaticResource Segment}" GroupName="vs" Content="{l:T voice.easy}" Margin="0"
+                                 IsChecked="{Binding VoiceSensitivity, Converter={StaticResource Eq}, ConverterParameter=Easy}"/>
+                </WrapPanel>
                 <TextBlock Style="{StaticResource Caption}" Text="{l:T voice.sensitivityTip}" Margin="0,10,0,0" TextWrapping="Wrap"/>
             </StackPanel>
         </Border>

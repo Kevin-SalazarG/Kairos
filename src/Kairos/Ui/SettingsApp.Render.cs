@@ -216,7 +216,9 @@ public static partial class SettingsApp
         if (voiceState != null)
             status = (status ?? new StatusDto(null, [], null, null, false, false, "")) with
             {
-                Voice = voiceState == "testing"
+                Voice = voiceState.StartsWith("list", StringComparison.Ordinal) || voiceState == "empty"
+                    ? RenderVoiceList(voiceState)
+                    : voiceState == "testing"
                     ? new Engine.Voice.VoiceStatus(true, true, "testing", 0, null, 0.031, true, 0.06)
                     : new Engine.Voice.VoiceStatus(true, false, "enrolling", 1, "voice.err.different", null, false, 0.06),
             };
@@ -404,7 +406,8 @@ public static partial class SettingsApp
             }
         }
         else
-            window.ShowPage(page is "quality-min" or "quality-advanced" or "quality-advanced-min" ? "quality" : page);
+            window.ShowPage(page is "quality-min" or "quality-advanced" or "quality-advanced-min" ? "quality"
+                : page is "voice-min" or "voice-bottom" or "voice-bottom-min" ? "voice" : page);
         if (page is "quality-advanced" or "quality-advanced-min")
         {
             var advanced = (window.PageHost.Content as FrameworkElement)?.FindName("AdvancedEncoding")
@@ -450,7 +453,7 @@ public static partial class SettingsApp
             Pump();
             Thread.Sleep(150);
         }
-        if (page is "quality-advanced" or "quality-advanced-min")
+        if (page is "quality-advanced" or "quality-advanced-min" or "voice-bottom" or "voice-bottom-min")
         {
             window.Scroller.ScrollToEnd();
             border.UpdateLayout();
@@ -477,6 +480,37 @@ public static partial class SettingsApp
             {
             }
         return 0;
+    }
+
+    /// <summary>Named voice lists for visual review, using synthetic labels and no recorded audio.</summary>
+    static Engine.Voice.VoiceStatus RenderVoiceList(string state)
+    {
+        const string clipId = "11111111111111111111111111111111";
+        bool spanish = Text.Language == "es";
+        var phrases = new List<Engine.Voice.VoicePhraseInfo>();
+        if (state != "empty")
+        {
+            phrases.Add(new(clipId, spanish ? "Kairos, guarda el clip" : "Kairos, save the clip", "clip", state != "list-disabled"));
+            phrases.Add(new("22222222222222222222222222222222", spanish ? "Graba esa jugada" : "Save that play", "clip", false));
+            phrases.Add(new("33333333333333333333333333333333", spanish ? "Captura la pantalla" : "Take a screenshot", "shot", true));
+        }
+        if (state == "list-many")
+        {
+            for (int i = 2; i < 5; i++)
+                phrases.Add(new((i + 4).ToString("x32"), spanish ? $"Otra frase para guardar mi jugada {i + 1}" : $"Another phrase to save my play {i + 1}", "clip", true));
+            for (int i = 1; i < 5; i++)
+                phrases.Add(new((i + 10).ToString("x32"), spanish ? $"Otra frase para hacer una captura {i + 1}" : $"Another phrase to take a screenshot {i + 1}", "shot", true));
+        }
+        bool enrolling = state == "list-enrolling", testing = state is "list-testing" or "list-ambiguous";
+        return new Engine.Voice.VoiceStatus(true, phrases.Any(p => p.Action == "clip"),
+            enrolling ? "enrolling" : testing ? "testing" : "idle", enrolling ? 1 : 0,
+            state == "list-ambiguous" ? "voice.err.ambiguous" : null,
+            testing ? 0.031 : null, state == "list-testing", 0.06,
+            HasShotPhrase: phrases.Any(p => p.Action == "shot"), Phrases: phrases,
+            ActivePhraseId: enrolling || testing ? clipId : null,
+            ActivePhraseName: enrolling || testing ? phrases[0].Name : null,
+            LastPhraseId: testing ? clipId : null,
+            LastPhraseName: testing ? phrases[0].Name : null);
     }
 
     /// <summary>A temp clips folder with drawn screenshots (no game in them) and a video, for the Clips page renders.</summary>
