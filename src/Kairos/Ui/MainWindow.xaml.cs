@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -13,8 +14,11 @@ public partial class MainWindow : Window
     readonly ShareViewModel _share;
     readonly ConnectionsViewModel _accounts;
     readonly Dictionary<string, Func<FrameworkElement>> _pages;
+    readonly Func<bool> _inUse;
+    readonly DispatcherOperation _shareWarmup;
     ClipsPage? _clipsPage;
     string? _current;
+    bool _closed;
 
     /// <param name="shareHost">Replaces the real FFmpeg/clipboard/browser link (used by --render).</param>
     /// <param name="accountsHost">Replaces the site sign-ins in Kairos's browser profile (used by --render).</param>
@@ -34,13 +38,7 @@ public partial class MainWindow : Window
         Icon = AppIcon ??= System.Windows.Media.Imaging.BitmapFrame.Create(new MemoryStream(AppIconArt.Ico()),
             System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
         SettingsApp.StartupTrace?.Invoke("window icon");
-        _vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName is nameof(SettingsViewModel.LastClipPath) or null)
-                OnLastClip(_vm.LastClipPath);
-            if (e.PropertyName is nameof(SettingsViewModel.LastShotPath) or null)
-                OnLastShot(_vm.LastShotPath);
-        };
+        _vm.PropertyChanged += OnViewModelChanged;
         _share.PropertyChanged += (_, _) =>
         {
             if (_share.IsOpen)
@@ -49,7 +47,11 @@ public partial class MainWindow : Window
         };
         // The share panel's XAML is the costliest piece of the window: it is built once the window is up and idle, so the
         // window appears sooner and the panel is ready before anyone opens it.
-        Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () => GC.KeepAlive(ShareLayer));
+        _shareWarmup = Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () =>
+        {
+            if (!_closed)
+                GC.KeepAlive(ShareLayer);
+        });
         _clips.ShareRequested += clip => _share.Open(clip.Path, clip.Thumbnail);
         _clips.PictureRequested += ShowPicture;
         PictureLayer.ShareRequested += clip => _share.Open(clip.Path, clip.Thumbnail);
@@ -69,10 +71,11 @@ public partial class MainWindow : Window
         _jobs = new Edit.EditJobs(RenderEdit, path => App.RecycleBin.Send(path, App.RecycleBin.UserFlags));
         Closed += (_, _) => _jobs.CancelAll();
         // An update closes this window only when nothing here would be lost.
-        _vm.InUse = () => _editor != null || _share.IsOpen || _jobs.Busy;
+        _inUse = WindowInUse;
+        _vm.InUse = _inUse;
         // The Status page's Latest card
-        _vm.ShareRequested += path => ShowShare(path);
-        _vm.PictureRequested += path => ShowPicture(PictureItem(path));
+        _vm.ShareRequested += OnShareRequested;
+        _vm.PictureRequested += ShowPicture;
         Closed += (_, _) => _share.Close();
         // A key typed into a hotkey box is not run by the engine meanwhile (it listens for keys, it does not reserve them).
         Action<bool> typing = _vm.SetTypingHotkey;
@@ -115,6 +118,32 @@ public partial class MainWindow : Window
         ShowPage("status");
         SettingsApp.StartupTrace?.Invoke("window status page");
         vm.NavigateRequested += ShowPage;
+    }
+
+    bool WindowInUse() => _editor != null || _share.IsOpen || _jobs.Busy;
+
+    void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(SettingsViewModel.LastClipPath) or null)
+            OnLastClip(_vm.LastClipPath);
+        if (e.PropertyName is nameof(SettingsViewModel.LastShotPath) or null)
+            OnLastShot(_vm.LastShotPath);
+    }
+
+    void OnShareRequested(string path) => ShowShare(path);
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _closed = true;
+        _shareWarmup.Abort();
+        _vm.PropertyChanged -= OnViewModelChanged;
+        _vm.ShareRequested -= OnShareRequested;
+        _vm.PictureRequested -= ShowPicture;
+        _vm.NavigateRequested -= ShowPage;
+        // A language change opens the replacement before closing this window.
+        if (ReferenceEquals(_vm.InUse, _inUse))
+            _vm.InUse = static () => false;
+        base.OnClosed(e);
     }
 
     ShareOverlay? _shareLayer;
