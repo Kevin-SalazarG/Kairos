@@ -65,6 +65,8 @@ $dotnetCommand = Get-Command -Name $DotNet -CommandType Application -ErrorAction
 New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
 & (Join-Path $PSScriptRoot 'stage-runtime.ps1') -Dest $outputPath -Obs $obsPath
 if ($LASTEXITCODE -ne 0) { throw 'Staging the OBS runtime failed.' }
+$obsVersion = (Get-Content -LiteralPath (Join-Path $outputPath 'libobs-version.txt') -Raw).Trim()
+if ($obsVersion -ne '32.2.2') { throw "This preview was validated with OBS 32.2.2, not $obsVersion." }
 
 & $dotnetCommand.Source publish (Join-Path $repo 'src\Kairos\Kairos.csproj') -c Release -r win-x64 `
     --self-contained true -p:Platform=x64 -p:Version=1.0.1-rx.1 -o $outputPath --nologo -v minimal

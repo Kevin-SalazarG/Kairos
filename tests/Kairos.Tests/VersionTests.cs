@@ -21,6 +21,6 @@ public static class VersionTests
     public static void The_version_is_the_full_one_without_build_details()
     {
         Assert.True(!AppInfo.Version.Contains('+'), AppInfo.Version);
-        Assert.True(System.Text.RegularExpressions.Regex.IsMatch(AppInfo.Version, @"^\d+\.\d+\.\d+(-beta\.\d+)?$"), $"a release or beta version: {AppInfo.Version}");
+        Assert.True(System.Text.RegularExpressions.Regex.IsMatch(AppInfo.Version, @"^\d+\.\d+\.\d+(-(beta|rx)\.\d+)?$"), $"a release or preview version: {AppInfo.Version}");
     }
 }

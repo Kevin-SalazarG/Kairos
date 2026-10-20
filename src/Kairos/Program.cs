@@ -18,6 +18,8 @@ public static class Program
 
         switch (mode)
         {
+            case "--selftest-profile":
+                return ProfileSmokeTest.Run(args, Console.Out);
             case "--selftest-host":
                 return SelfTest.Host(Console.Out);
             case "--selftest":

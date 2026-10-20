@@ -129,7 +129,7 @@ public static class UpdateRulesTests
         service.NewVersion += told.Add;
         service.Check(T0).GetAwaiter().GetResult();
         Assert.Equal(UpdateState.Available, service.Status!.State, "available");
-        Assert.Equal("https://github.com/BasilForge/Kairos/releases/tag/v1.0.1", service.Status.NotesUrl, "its notes");
+        Assert.Equal("https://github.com/Kevin-SalazarG/Kairos/releases/tag/v1.0.1", service.Status.NotesUrl, "its notes");
         new UpdateService(updater, seen, localSource: false).Check(T0.AddDays(1)).GetAwaiter().GetResult();
         Assert.Equal(1, told.Count, "told once, even after a restart of Kairos");
 

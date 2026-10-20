@@ -42,6 +42,8 @@ public sealed class CapturePipeline : IDisposable
     public bool FolderFellBack { get; private set; }
     public EncoderPlan? Plan { get; private set; }
     public EncoderChoice? Choice { get; private set; }
+    public string RateControl { get; private set; } = "";
+    public int QualityLevel { get; private set; }
     public int Fps { get; private set; }
     public (int W, int H) Output { get; private set; }
     /// <summary>The canvas: the captured monitor's own size, which screenshots keep.</summary>
@@ -90,7 +92,8 @@ public sealed class CapturePipeline : IDisposable
         }
 
         ObsLog.Info($"pipeline built: mode={_s.Capture.Mode} {baseW}x{baseH} -> {Output.W}x{Output.H}@{Fps} " +
-                    $"{Choice.Id} cq={Plan!.Cq} max={Plan.MaxBitrateKbps}kbps folder={ClipsFolder}");
+                    $"{Choice.Id} mode={RateControl} qp={QualityLevel} " +
+                    $"packetBudget={ReplayBudget.LimitMb(_s, Choice, Plan!, _s.Replay.Seconds, BufferBudget.PhysicalMemoryBytes)}MB folder={ClipsFolder}");
     }
 
     void BuildScene(string monitorId, int baseW, int baseH)
@@ -242,7 +245,15 @@ public sealed class CapturePipeline : IDisposable
 
         using (var d = new ObsData())
         {
-            foreach (var (key, value) in EncoderCatalog.Settings(Plan, choice, _s.Video))
+            var settings = EncoderCatalog.Settings(Plan, choice, _s.Video);
+            RateControl = (string)settings["rate_control"];
+            QualityLevel = choice.Vendor switch
+            {
+                EncoderVendor.Amd => (int)(long)settings["cqp"],
+                EncoderVendor.Software => (int)(long)settings["crf"],
+                _ => Plan.Cq,
+            };
+            foreach (var (key, value) in settings)
             {
                 switch (value)
                 {
@@ -471,7 +482,8 @@ public sealed class CapturePipeline : IDisposable
             ClipsFolder, FolderFellBack, LastError,
             RecordingPaused,
             Recording ? _recordClock.Seconds(DateTime.UtcNow) : 0,
-            Recording ? (long)Obs.obs_output_get_total_bytes(_record) : 0);
+            Recording ? (long)Obs.obs_output_get_total_bytes(_record) : 0,
+            RateControl, QualityLevel, Choice?.Vendor == EncoderVendor.Amd);
     }
 
     void ReleaseRecordOutput()

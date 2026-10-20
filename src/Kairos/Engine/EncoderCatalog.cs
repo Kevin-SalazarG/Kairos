@@ -77,9 +77,14 @@ public static class EncoderCatalog
             case EncoderVendor.Amd:
                 bool constantQp = video?.AmdRateControl == AmdRateControl.Cqp;
                 s["rate_control"] = constantQp ? "CQP" : "QVBR";
-                s["cqp"] = constantQp ? (long)Math.Clamp(video!.AmdCqp, 1, 51) : cq;
+                s["cqp"] = constantQp ? (long)Math.Clamp(video!.AmdCqp, 1, choice.Codec == VideoCodec.Av1 ? 63 : 51) : cq;
                 // OBS AMF ignores bitrate in CQP and QVBR. Do not advertise it as a quality cap.
-                s["preset"] = "quality";
+                s["preset"] = video?.AmdPreset switch
+                {
+                    AmdEncoderPreset.Speed => "speed",
+                    AmdEncoderPreset.Balanced => "balanced",
+                    _ => "quality",
+                };
                 s["pre_analysis"] = false;
                 s["profile"] = profile;
                 s["bf"] = choice.Codec == VideoCodec.Hevc ? 0L : 2L;

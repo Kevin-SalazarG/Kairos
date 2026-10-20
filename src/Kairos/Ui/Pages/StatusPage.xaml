@@ -40,6 +40,8 @@
     </UserControl.Resources>
     <StackPanel>
         <TextBlock Style="{StaticResource Title}" Text="{l:T nav.status}"/>
+        <TextBlock Text="{l:T quality.replayMemoryTip}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="2,0,2,12"
+                   Visibility="{Binding AmdControlsVisible, Converter={StaticResource Vis}}"/>
 
         <!-- Only when something needs attention -->
         <Border Style="{StaticResource Notice}" Visibility="{Binding FolderWarning, Converter={StaticResource Vis}}">

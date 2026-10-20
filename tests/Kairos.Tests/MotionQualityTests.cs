@@ -46,6 +46,7 @@ public static class MotionQualityTests
         Assert.Equal(512, ReplayBudget.LimitMb(s, Amd, Plan, 120, 2L << 30));
         s.Replay.MaxMemoryMb = -1;
         s.Video.AmdCqp = 999;
+        s.Video.Codec = VideoCodec.Hevc;
         s.Video.AmdRateControl = (AmdRateControl)99;
         s.Normalize();
         Assert.Equal(128, s.Replay.MaxMemoryMb);

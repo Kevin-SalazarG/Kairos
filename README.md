@@ -1,3 +1,5 @@
+> **Kairos RX fork:** RX 6600 motion-quality profile, native AMD controls and an isolated portable build. See [build and testing instructions](docs/rx6600.md). The upstream documentation below describes the original Kairos release.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/media/logo-dark.png">

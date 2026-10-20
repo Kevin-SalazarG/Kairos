@@ -34,6 +34,7 @@ public static class CaptureProfiles
         settings.Video.Preset = "p4";
         settings.Video.AmdRateControl = AmdRateControl.Cqp;
         settings.Video.AmdCqp = 16;
+        settings.Video.AmdPreset = AmdEncoderPreset.Balanced;
 
         settings.Replay.Enabled = true;
         settings.Replay.Seconds = 120;

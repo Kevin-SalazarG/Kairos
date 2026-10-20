@@ -340,11 +340,18 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public List<Option> QuickOptions { get; private set; } = [];
     public List<Option> AudioBitrates { get; private set; } = [];
     public List<Option> FolderLimits { get; private set; } = [];
+    public List<Option> AmdModes { get; private set; } = [];
+    public List<Option> AmdSpeeds { get; private set; } = [];
+    public List<Option> ReplayMemoryOptions { get; private set; } = [];
     public List<Option> Languages { get; } = [.. Text.Languages.Select(l => new Option(l.Name, l.Code))];
 
     /// <summary>The fixed lists, labelled in the current language (built again after a language switch).</summary>
     void BuildTextOptions()
     {
+        AmdModes = [new(Text.Get("quality.amdQvbr"), AmdRateControl.Qvbr), new(Text.Get("quality.amdCqp"), AmdRateControl.Cqp)];
+        AmdSpeeds = [.. new[] { AmdEncoderPreset.Speed, AmdEncoderPreset.Balanced, AmdEncoderPreset.Quality }
+            .Select(p => new Option(Text.Get("quality.amdSpeed" + p), p))];
+        ReplayMemoryOptions = [.. new[] { 128, 256, 512, 1024, 1536, 2048, 4096 }.Select(m => new Option($"{m} MB", m))];
         FpsOptions = [.. new[] { 30, 60, 90, 120, 144, 165, 240 }.Select(f => new Option(Text.Ltr($"{f} fps"), f))];
         QuickOptions = [.. new[] { 10, 15, 20, 30, 45, 60 }.Select(s => new Option(Text.Format("unit.seconds", s), s))];
         AudioBitrates = [.. new[] { 128, 160, 192, 256, 320 }.Select(b => new Option(Text.Ltr($"{b} kbps"), b))];
@@ -456,6 +463,19 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     IReadOnlyCollection<string>? EncoderIds => _caps?.Encoders;
 
+    EncoderChoice? SelectedEncoder => EncoderIds == null ? null : EncoderCatalog.Pick(_s.Video.Codec, EncoderIds);
+    public bool AmdControlsVisible => SelectedEncoder?.Vendor == EncoderVendor.Amd;
+    public bool AmdCqpVisible => AmdControlsVisible && _s.Video.AmdRateControl == AmdRateControl.Cqp;
+    public bool LegacyQualityVisible => !AmdCqpVisible;
+    public bool CustomQualityVisible => LegacyQualityVisible && _s.Video.Quality == QualityPreset.Custom;
+    public bool NvencSpeedVisible => SelectedEncoder?.Vendor == EncoderVendor.Nvidia;
+    public bool BitrateControlVisible => !AmdControlsVisible;
+    public AmdRateControl AmdMode { get => _s.Video.AmdRateControl; set => Set(() => _s.Video.AmdRateControl = value); }
+    public int AmdQp { get => Math.Min(_s.Video.AmdCqp, AmdQpMaximum); set => Set(() => _s.Video.AmdCqp = Math.Clamp(value, 1, AmdQpMaximum)); }
+    public int AmdQpMaximum => (SelectedEncoder?.Codec ?? _s.Video.Codec) == VideoCodec.Av1 ? 63 : 51;
+    public AmdEncoderPreset AmdSpeed { get => _s.Video.AmdPreset; set => Set(() => _s.Video.AmdPreset = value); }
+    public int ReplayMemoryMb { get => _s.Replay.MaxMemoryMb; set => Set(() => _s.Replay.MaxMemoryMb = value); }
+
     public VideoCodec Codec { get => _s.Video.Codec; set => Set(() => _s.Video.Codec = value); }
     public bool Av1Available => CodecAvailable(VideoCodec.Av1);
     public bool HevcAvailable => CodecAvailable(VideoCodec.Hevc);
@@ -504,8 +524,14 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             var (w, h) = VideoMath.OutputSize(bw, bh, _s.Video.Resolution);
             var plan = EncoderPresets.Plan(_s.Video.Codec, _s.Video.Quality, w, h, _s.Video.Fps, _s.Video.CustomCq,
                 _s.Video.CustomMbps, nvencAvailable: true, _s.Video.Preset);
+            if (SelectedEncoder is { Vendor: EncoderVendor.Amd } choice)
+            {
+                int limit = ReplayBudget.LimitMb(_s, choice, plan, _s.Replay.Seconds, BufferBudget.PhysicalMemoryBytes);
+                int total = limit * (_s.Replay.QuickEnabled ? 2 : 1);
+                return Text.Format("quality.packetBudget", Text.Ltr(FormatSize(total * 1024L * 1024)));
+            }
             int estimate = EncoderPresets.EstimateBufferMb(plan.MaxBitrateKbps, _s.Replay.Seconds);
-            int mb = Math.Min(estimate, BufferBudget.CapMb(estimate, BufferBudget.PhysicalMemoryBytes));
+            int mb = BufferBudget.CapMb(estimate, BufferBudget.PhysicalMemoryBytes);
             return Text.Format("quality.estimate", Text.Ltr(FormatSize(mb * 1024L * 1024)));
         }
     }
@@ -838,7 +864,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public double BufferProgress => _s.Replay.Enabled && _status?.Engine is { BufferTargetSeconds: > 0 } e ? (double)e.BufferSeconds / e.BufferTargetSeconds : 0;
     public string BufferText => !_s.Replay.Enabled ? Text.Get("status.replayOff")
-        : _status?.Engine is { } e ? $"{Text.Duration(e.BufferSeconds)} / {Text.Duration(e.BufferTargetSeconds)}" : "–";
+        : _status?.Engine is { } e ? (e.BufferDurationEstimated ? "~" : "") + $"{Text.Duration(e.BufferSeconds)} / {Text.Duration(e.BufferTargetSeconds)}" : "–";
     public string MemoryText => _status?.Engine is { } e ? Text.Ltr($"{e.WorkingSetMb} MB") : "–";
 
     public string QualityText => _status?.Engine is { } e ? $"{CodecName(e.Encoder)} • {e.Height}p{Math.Round(e.Fps)}" : "–";

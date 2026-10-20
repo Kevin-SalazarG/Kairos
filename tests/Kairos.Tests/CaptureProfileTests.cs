@@ -25,6 +25,7 @@ public static class CaptureProfileTests
         Assert.Equal("p4", settings.Video.Preset, "encoder speed");
         Assert.Equal(AmdRateControl.Cqp, settings.Video.AmdRateControl, "constant quantizer");
         Assert.Equal(16, settings.Video.AmdCqp, "AMD quantizer");
+        Assert.Equal(AmdEncoderPreset.Balanced, settings.Video.AmdPreset, "AMD encoding speed");
         Assert.Equal(true, settings.Replay.Enabled, "replay enabled");
         Assert.Equal(120, settings.Replay.Seconds, "two minutes");
         Assert.Equal(1024, settings.Replay.MaxMemoryMb, "one GiB memory limit");

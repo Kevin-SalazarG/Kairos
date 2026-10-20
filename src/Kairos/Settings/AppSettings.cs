@@ -10,6 +10,8 @@ public enum QualityPreset { Ultra, High, Balanced, Light, Custom }
 
 public enum AmdRateControl { Qvbr, Cqp }
 
+public enum AmdEncoderPreset { Quality, Balanced, Speed }
+
 public enum OutputResolution { Native, P2160, P1440, P1080, P720 }
 
 public enum VoiceSensitivity { Strict, Normal, Easy }
@@ -63,7 +65,8 @@ public sealed class AppSettings
         Video.CustomMbps = Math.Clamp(Video.CustomMbps, 2, 300);
         if (string.IsNullOrWhiteSpace(Video.Preset)) Video.Preset = "p5";
         if (!Enum.IsDefined(Video.AmdRateControl)) Video.AmdRateControl = AmdRateControl.Qvbr;
-        Video.AmdCqp = Math.Clamp(Video.AmdCqp, 1, 51);
+        Video.AmdCqp = Math.Clamp(Video.AmdCqp, 1, Video.Codec == VideoCodec.Av1 ? 63 : 51);
+        if (!Enum.IsDefined(Video.AmdPreset)) Video.AmdPreset = AmdEncoderPreset.Quality;
 
         Replay.Seconds = Math.Clamp(Replay.Seconds, 15, 1200);
         Replay.QuickSeconds = Math.Clamp(Replay.QuickSeconds, 5, 120);
@@ -118,6 +121,7 @@ public sealed class VideoSettings
     // Keep old settings on QVBR; CQP uses the codec's native QP scale, without AV1 conversion.
     public AmdRateControl AmdRateControl { get; set; } = AmdRateControl.Qvbr;
     public int AmdCqp { get; set; } = 16;
+    public AmdEncoderPreset AmdPreset { get; set; } = AmdEncoderPreset.Quality;
 }
 
 public sealed class ReplaySettings

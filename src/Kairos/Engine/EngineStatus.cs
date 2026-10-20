@@ -19,4 +19,7 @@ public sealed record EngineStatus(
     string? LastError,
     bool RecordingPaused = false,
     double RecordingSeconds = 0,
-    long RecordingBytes = 0);
+    long RecordingBytes = 0,
+    string RateControl = "",
+    int QualityLevel = 0,
+    bool BufferDurationEstimated = false);

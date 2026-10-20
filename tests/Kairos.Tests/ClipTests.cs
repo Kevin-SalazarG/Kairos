@@ -105,7 +105,7 @@ public static class ClipTests
     [Test]
     public static void Unusable_folder_falls_back_to_videos()
     {
-        string videos = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "Kairos");
+        string videos = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), AppInfo.Name);
         string folder = ClipOrganizer.ResolveFolder(@"Q:\Gone", p => p == videos, out bool fellBack);
         Assert.Equal(videos, folder, "videos folder");
         Assert.Equal(true, fellBack, "fell back");

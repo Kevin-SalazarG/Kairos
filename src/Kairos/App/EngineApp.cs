@@ -20,7 +20,6 @@ public sealed class EngineApp : ApplicationContext
     readonly SaveToast _toast = new();
     readonly ClipIndex _clipIndex = new(ClipIndex.DefaultPath);
     readonly VoiceTrigger _voice = new(SpeechModels.DefaultDirectory, Path.Combine(SettingsStore.AppDataDir, "voice"));
-    int _pendingSeconds;
     bool _pendingByVoice;
     /// <summary>The newest clip saved in this session, until it is deleted from the tray.</summary>
     string? _undoClip;
@@ -316,7 +315,6 @@ public sealed class EngineApp : ApplicationContext
             return;
         }
         _pendingByVoice = byVoice;
-        _pendingSeconds = quick ? _settings.Replay.QuickSeconds : _pipeline.GetStatus().BufferSeconds;
         _pendingApp = CapturedApp();
         var request = _pipeline.RequestSave(quick);
         if (request != SaveWatch.Request.Started)
@@ -363,13 +361,24 @@ public sealed class EngineApp : ApplicationContext
             return;
         }
         ObsLog.Info($"clip saved{(_pendingByVoice ? " by voice" : "")}: {final}");
+        // The packet budget can evict old GOPs before the requested duration is reached.
+        // Read the finished file rather than presenting elapsed buffer time as the saved duration.
+        string duration = "";
+        try
+        {
+            duration = " • " + Text.Duration((int)Math.Round(Engine.Share.ClipTranscoder.Probe(final).Duration));
+        }
+        catch (Exception e) when (e is Engine.Share.ShareException or IOException or UnauthorizedAccessException)
+        {
+            ObsLog.Warn($"could not read saved duration: {e.Message}");
+        }
 
         _tray.FlashSaved();
         if (_settings.General.SoundOnSave)
             PlayChime();
         if (_settings.General.ToastOnSave)
             _toast.Show(Text.Get("toast.saved"),
-                $"{app} • {Text.Duration(_pendingSeconds)}" + (_pendingByVoice ? " • " + Text.Get("toast.byVoice") : ""), Text.IsRightToLeft);
+                $"{app}{duration}" + (_pendingByVoice ? " • " + Text.Get("toast.byVoice") : ""), Text.IsRightToLeft);
         RefreshTray();
         EnforceFolderLimit();
         if (_saveWatch.ShouldWarnLowDisk(free, DateTime.UtcNow))
