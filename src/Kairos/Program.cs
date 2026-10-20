@@ -280,18 +280,29 @@ public static class Program
     static int VoiceInfo()
     {
         string dir = Path.Combine(Settings.SettingsStore.AppDataDir, "voice");
-        var samples = Engine.Voice.VoicePhrase.LoadSamples(dir);
-        if (samples.Count != 3)
+        var bank = new Engine.Voice.VoicePhraseBank(dir);
+        var phrases = bank.Catalog;
+        if (bank.HasError)
+        {
+            Console.WriteLine("voice phrase storage could not be read; files were kept unchanged");
+            return 2;
+        }
+        if (phrases.Count == 0)
         {
             Console.WriteLine("no phrase recorded");
             return 1;
         }
         using var models = new Engine.Voice.SpeechModels(Engine.Voice.SpeechModels.DefaultDirectory);
-        var phrase = Engine.Voice.VoicePhrase.Build(models, samples);
-        Console.WriteLine($"samples: {string.Join(", ", samples.Select(x => $"{x.Length / 16000.0:F2} s"))}");
-        Console.WriteLine($"spread: {phrase.Spread:F3}");
-        foreach (var s in Enum.GetValues<Settings.VoiceSensitivity>())
-            Console.WriteLine($"{s}: {Settings.VoiceSettings.Threshold(s, phrase.Spread):F3}");
+        foreach (var info in phrases)
+        {
+            var samples = bank.LoadSamples(info.Id);
+            var phrase = Engine.Voice.VoicePhrase.Build(models, samples);
+            Console.WriteLine($"phrase: {info.Id} / {info.Action} / {info.Name} / {(info.Enabled ? "enabled" : "disabled")}");
+            Console.WriteLine($"samples: {string.Join(", ", samples.Select(x => $"{x.Length / 16000.0:F2} s"))}");
+            Console.WriteLine($"spread: {phrase.Spread:F3}");
+            foreach (var s in Enum.GetValues<Settings.VoiceSensitivity>())
+                Console.WriteLine($"{s}: {Settings.VoiceSettings.Threshold(s, phrase.Spread):F3}");
+        }
         return 0;
     }
 }

@@ -734,6 +734,16 @@ public sealed class EngineApp : ApplicationContext
 
     string Execute(string command)
     {
+        if (command.StartsWith("voice-phrase ", StringComparison.Ordinal))
+        {
+            if (command.Length > 2048)
+                throw new ArgumentException("voice.err.command");
+            VoicePhraseCommand request;
+            try { request = JsonSerializer.Deserialize<VoicePhraseCommand>(command[13..], Ipc.Json) ?? throw new JsonException(); }
+            catch (JsonException) { throw new ArgumentException("voice.err.command"); }
+            _voice.Execute(request);
+            return JsonSerializer.Serialize(Status(), Ipc.Json);
+        }
         switch (command)
         {
             case "save": SaveClip(false); break;
