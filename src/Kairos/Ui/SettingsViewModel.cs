@@ -13,21 +13,57 @@ namespace Kairos.Ui;
 
 /// <summary>
 /// Settings being edited plus live engine status. Edits refresh every binding; option lists are cached so
-/// dropdowns are not rebuilt, and the 1 s status poll only refreshes the status properties.
+/// dropdowns are not rebuilt, and status polling only refreshes values that have visibly changed.
 /// </summary>
 public sealed class SettingsViewModel : INotifyPropertyChanged
 {
     static readonly int[] SecondsSteps = [15, 30, 60, 90, 120, 180, 240, 300, 420, 600, 900, 1200];
-    static readonly string[] StatusProperties =
+    readonly StatusNotification<SettingsViewModel>[] _statusNotifications =
     [
-        nameof(EngineOnline), nameof(State), nameof(StateTitle), nameof(StateDetail), nameof(BufferProgress), nameof(BufferText),
-        nameof(MemoryText), nameof(QualityText), nameof(EncoderText), nameof(LiveCaptureDetailText), nameof(LastClipPath), nameof(LastShotPath),
-        nameof(LastClipName), nameof(LastShotName), nameof(HasLastClip), nameof(HasLastShot), nameof(FolderWarning), nameof(EffectiveFolder),
-        nameof(SaveVisible), nameof(ReplayPauseVisible), nameof(ReplayPauseTip), nameof(RecordState), nameof(RecordTitle), nameof(RecordDetail),
-        nameof(IsRecording), nameof(IsRecordingLive), nameof(StartPrimaryVisible), nameof(StartGhostVisible), nameof(RecordPauseLabel),
-        nameof(VoiceView), nameof(ShotView), nameof(VoiceStep), nameof(VoiceDone1), nameof(VoiceDone2), nameof(VoiceDone3), nameof(VoiceMessage),
-        nameof(VoiceResult), nameof(VoiceLastMatch), nameof(VoiceStrength), nameof(VoiceNote),
+        Track(nameof(EngineOnline), static vm => vm.EngineOnline),
+        Track(nameof(State), static vm => vm.State),
+        Track(nameof(StateTitle), static vm => vm.StateTitle),
+        Track(nameof(StateDetail), static vm => vm.StateDetail),
+        Track(nameof(BufferProgress), static vm => vm.BufferProgress),
+        Track(nameof(BufferText), static vm => vm.BufferText),
+        Track(nameof(MemoryText), static vm => vm.MemoryText),
+        Track(nameof(QualityText), static vm => vm.QualityText),
+        Track(nameof(EncoderText), static vm => vm.EncoderText),
+        Track(nameof(LiveCaptureDetailText), static vm => vm.LiveCaptureDetailText),
+        Track(nameof(LastClipPath), static vm => vm.LastClipPath),
+        Track(nameof(LastShotPath), static vm => vm.LastShotPath),
+        Track(nameof(LastClipName), static vm => vm.LastClipName),
+        Track(nameof(LastShotName), static vm => vm.LastShotName),
+        Track(nameof(HasLastClip), static vm => vm.HasLastClip),
+        Track(nameof(HasLastShot), static vm => vm.HasLastShot),
+        Track(nameof(FolderWarning), static vm => vm.FolderWarning),
+        Track(nameof(EffectiveFolder), static vm => vm.EffectiveFolder),
+        Track(nameof(SaveVisible), static vm => vm.SaveVisible),
+        Track(nameof(ReplayPauseVisible), static vm => vm.ReplayPauseVisible),
+        Track(nameof(ReplayPauseTip), static vm => vm.ReplayPauseTip),
+        Track(nameof(RecordState), static vm => vm.RecordState),
+        Track(nameof(RecordTitle), static vm => vm.RecordTitle),
+        Track(nameof(RecordDetail), static vm => vm.RecordDetail),
+        Track(nameof(IsRecording), static vm => vm.IsRecording),
+        Track(nameof(IsRecordingLive), static vm => vm.IsRecordingLive),
+        Track(nameof(StartPrimaryVisible), static vm => vm.StartPrimaryVisible),
+        Track(nameof(StartGhostVisible), static vm => vm.StartGhostVisible),
+        Track(nameof(RecordPauseLabel), static vm => vm.RecordPauseLabel),
+        Track(nameof(VoiceView), static vm => vm.VoiceView),
+        Track(nameof(ShotView), static vm => vm.ShotView),
+        Track(nameof(VoiceStep), static vm => vm.VoiceStep),
+        Track(nameof(VoiceDone1), static vm => vm.VoiceDone1),
+        Track(nameof(VoiceDone2), static vm => vm.VoiceDone2),
+        Track(nameof(VoiceDone3), static vm => vm.VoiceDone3),
+        Track(nameof(VoiceMessage), static vm => vm.VoiceMessage),
+        Track(nameof(VoiceResult), static vm => vm.VoiceResult),
+        Track(nameof(VoiceLastMatch), static vm => vm.VoiceLastMatch),
+        Track(nameof(VoiceStrength), static vm => vm.VoiceStrength),
+        Track(nameof(VoiceNote), static vm => vm.VoiceNote),
     ];
+
+    static StatusNotification<SettingsViewModel> Track<T>(string name, Func<SettingsViewModel, T> read) =>
+        StatusNotification<SettingsViewModel>.Create(name, read);
 
     AppSettings _s = new();
     string _savedJson = "";
@@ -37,6 +73,14 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromMilliseconds(500) };
     readonly DispatcherTimer _messageTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     bool _polling;
+    bool _started, _capsLoading;
+    volatile bool _stopped;
+    int _lifetime;
+
+    internal Func<string, int, Task<string?>> RequestAsync { get; set; } =
+        static (command, timeout) => PipeClient.SendAsync(command, timeout);
+    internal Action<string, Action<System.Windows.Media.Imaging.BitmapSource?>> RequestThumbnail { get; set; } =
+        ShellThumbnail.Request;
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public event Action? LanguageChanged;
@@ -47,7 +91,20 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     {
         Load();
         _poll.Tick += (_, _) => Poll();
-        _messageTimer.Tick += (_, _) => { _messageTimer.Stop(); _message = ""; Raise(nameof(Message), nameof(ShowBar)); };
+        _messageTimer.Tick += (_, _) =>
+        {
+            _messageTimer.Stop();
+            if (_stopped)
+                return;
+            _message = "";
+            Raise(nameof(Message), nameof(ShowBar));
+        };
+        _reloadDelay.Tick += (_, _) =>
+        {
+            _reloadDelay.Stop();
+            if (!_stopped)
+                ReloadIfChangedOutside();
+        };
         SaveNowCommand = new RelayCommand(_ => SendAsync("save"));
         PauseCommand = new RelayCommand(_ => SendAsync("toggle"));
         RecordCommand = new RelayCommand(_ => SendAsync("record"));
@@ -84,6 +141,19 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public void Start()
     {
+        if (_started)
+            return;
+        _started = true;
+        _stopped = false;
+        _lifetime++;
+        _polling = false;
+        _capsLoading = false;
+        // A request issued before this run cannot publish its image in the new generation.
+        if (LastClipThumbnail == null)
+            _clipThumbFor = null;
+        if (LastShotThumbnail == null)
+            _shotThumbFor = null;
+        UpdateLatestPictures();
         LoadCapsAsync();
         Poll();
         _poll.Start();
@@ -92,10 +162,30 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public void Stop()
     {
+        _started = false;
+        _stopped = true;
+        _lifetime++;
         if (VoiceView is "enrolling" or "testing")
             PipeClient.Send("voice-cancel", 800);
         _poll.Stop();
+        _messageTimer.Stop();
+        _reloadDelay.Stop();
         _watcher?.Dispose();
+        _watcher = null;
+        _polling = false;
+        _capsLoading = false;
+    }
+
+    void PostIfCurrent(int lifetime, Action callback)
+    {
+        var dispatcher = _poll.Dispatcher;
+        if (_stopped || lifetime != Volatile.Read(ref _lifetime) || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
+            return;
+        _ = dispatcher.BeginInvoke(() =>
+        {
+            if (!_stopped && lifetime == _lifetime)
+                callback();
+        });
     }
 
     FileSystemWatcher? _watcher;
@@ -109,12 +199,12 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     {
         string path = SettingsStore.DefaultPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        _reloadDelay.Tick += (_, _) => { _reloadDelay.Stop(); ReloadIfChangedOutside(); };
         _watcher = new FileSystemWatcher(Path.GetDirectoryName(path)!, Path.GetFileName(path))
         {
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
         };
-        FileSystemEventHandler changed = (_, _) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        int lifetime = _lifetime;
+        FileSystemEventHandler changed = (_, _) => PostIfCurrent(lifetime, () =>
         {
             _reloadDelay.Stop();
             _reloadDelay.Start();
@@ -163,7 +253,9 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     /// <summary>The engine's status changed; the update bar only when the update did.</summary>
     void RaiseStatus()
     {
-        Raise(StatusProperties);
+        foreach (var notification in _statusNotifications)
+            if (notification.ReadChanged(this) is { } changed)
+                PropertyChanged?.Invoke(this, changed);
         if (Update == _updateShown)
             return;
         _updateShown = Update;
@@ -190,19 +282,45 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     /// <summary>Small pictures of the latest clip and screenshot, fetched again only when they change.</summary>
     void UpdateLatestPictures()
     {
-        void Fetch(string? path, ref string? fetchedFor, Action<System.Windows.Media.Imaging.BitmapSource?> set)
+        if (!string.Equals(LastClipPath, _clipThumbFor, StringComparison.OrdinalIgnoreCase))
+            FetchLatestPicture(LastClipPath, clip: true);
+        if (!string.Equals(LastShotPath, _shotThumbFor, StringComparison.OrdinalIgnoreCase))
+            FetchLatestPicture(LastShotPath, clip: false);
+    }
+
+    void FetchLatestPicture(string? path, bool clip)
+    {
+        if (clip)
         {
-            if (string.Equals(path, fetchedFor, StringComparison.OrdinalIgnoreCase))
-                return;
-            fetchedFor = path;
-            set(null);
-            if (path == null || !File.Exists(path))
-                return;
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
-            ShellThumbnail.Request(path, image => dispatcher?.BeginInvoke(() => set(image)));
+            _clipThumbFor = path;
+            LastClipThumbnail = null;
+            Raise(nameof(LastClipThumbnail));
         }
-        Fetch(LastClipPath, ref _clipThumbFor, image => { LastClipThumbnail = image; Raise(nameof(LastClipThumbnail)); });
-        Fetch(LastShotPath, ref _shotThumbFor, image => { LastShotThumbnail = image; Raise(nameof(LastShotThumbnail)); });
+        else
+        {
+            _shotThumbFor = path;
+            LastShotThumbnail = null;
+            Raise(nameof(LastShotThumbnail));
+        }
+        if (path == null || !File.Exists(path))
+            return;
+        int lifetime = _lifetime;
+        RequestThumbnail(path, image => PostIfCurrent(lifetime, () =>
+        {
+            // A slower thumbnail must not replace a more recent clip's picture.
+            if (!string.Equals(path, clip ? _clipThumbFor : _shotThumbFor, StringComparison.OrdinalIgnoreCase))
+                return;
+            if (clip)
+            {
+                LastClipThumbnail = image;
+                Raise(nameof(LastClipThumbnail));
+            }
+            else
+            {
+                LastShotThumbnail = image;
+                Raise(nameof(LastShotThumbnail));
+            }
+        }));
     }
 
     void Raise(params string[] names)
@@ -214,7 +332,14 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     void RaiseAll()
     {
         RefreshKeyStates();
+        InvalidateStatus();
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+    }
+
+    void InvalidateStatus()
+    {
+        foreach (var notification in _statusNotifications)
+            notification.Invalidate();
     }
 
     void Set(Action change)
@@ -627,7 +752,21 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         }
     }
 
-    string? _keysSeen;
+    string? _keysSeenSaved;
+    (string Save, string Quick, string Toggle, string Record, string PauseRecord, string Screenshot, string Language) _keysSeenDraft;
+    Dictionary<string, bool>? _keysSeenHeld;
+
+    static bool SameReservations(Dictionary<string, bool>? current, Dictionary<string, bool>? previous)
+    {
+        if (current == null || previous == null)
+            return current == null && previous == null;
+        if (current.Count != previous.Count)
+            return false;
+        foreach (var (action, reserved) in current)
+            if (!previous.TryGetValue(action, out bool wasReserved) || reserved != wasReserved)
+                return false;
+        return true;
+    }
 
     static string KeyOf(HotkeySettings keys, string action) => action switch
     {
@@ -661,11 +800,12 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     void RefreshKeyStates()
     {
         var held = _status?.Hotkeys;
-        string seen = (held == null ? "" : string.Join(",", held.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}")))
-            + "|" + string.Join(",", KeysInUse()) + "|" + _savedJson;
-        if (seen == _keysSeen)
+        var draft = (HkSave, HkQuick, HkToggle, HkRecord, HkPauseRecord, HkScreenshot, Text.Language);
+        if (_keysSeenSaved == _savedJson && _keysSeenDraft == draft && SameReservations(held, _keysSeenHeld))
             return;
-        _keysSeen = seen;
+        _keysSeenSaved = _savedJson;
+        _keysSeenDraft = draft;
+        _keysSeenHeld = held == null ? null : new Dictionary<string, bool>(held);
         var saved = _savedJson == null ? null : SettingsStore.Deserialize(_savedJson).Hotkeys;
         IReadOnlyList<Hotkey>? nvidia = null;
         Func<Hotkey, bool>? available = null;
@@ -751,6 +891,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         set
         {
             _testCard = value;
+            InvalidateStatus();
             Raise(nameof(VoiceView), nameof(ShotView));
         }
     }
@@ -931,10 +1072,11 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         IsDirty = false;
         _message = "…";
         RaiseAll();
+        int lifetime = _lifetime;
         Task.Run(() =>
         {
             string? reply = PipeClient.Send("apply", 4000);
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            PostIfCurrent(lifetime, () =>
             {
                 _message = Text.Get(reply != null ? "bar.applied" : "bar.savedOnly");
                 if (reply != null)
@@ -973,26 +1115,28 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public void SetTypingHotkey(bool typing)
     {
         string command = typing ? "hotkeys-typing" : "hotkeys-typed";
-        _typingSent = _typingSent.ContinueWith(_ => PipeClient.Send(command, 800), TaskScheduler.Default);
+        var request = RequestAsync;
+        _typingSent = _typingSent.ContinueWith(_ => request(command, 800), TaskScheduler.Default).Unwrap();
     }
 
-    void SendAsync(string command) => Task.Run(() =>
+    async void SendAsync(string command)
     {
-        string? reply = PipeClient.Send(command);
+        int lifetime = _lifetime;
+        string? reply = await RequestAsync(command, 3000).ConfigureAwait(false);
         if (reply != null)
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => { TryParseStatus(reply); RaiseStatus(); });
-    });
+            PostIfCurrent(lifetime, () => { TryParseStatus(reply); RaiseStatus(); });
+    }
 
     async void Poll()
     {
-        if (_polling)
+        if (_polling || _stopped)
             return;
         _polling = true;
         // Asked without a thread waiting on the answer. The answer is handed to the window's thread explicitly: the first
         // poll runs before the window's message loop does, where an await has no context to come back to.
-        var dispatcher = _poll.Dispatcher;
-        string? reply = await PipeClient.SendAsync(StatusQuestion, 800).ConfigureAwait(false);
-        _ = dispatcher.BeginInvoke(() => TakeStatus(reply));
+        int lifetime = _lifetime;
+        string? reply = await RequestAsync(StatusQuestion, 800).ConfigureAwait(false);
+        PostIfCurrent(lifetime, () => TakeStatus(reply));
     }
 
     void TakeStatus(string? reply)
@@ -1024,18 +1168,27 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         catch (JsonException) { }
     }
 
-    void LoadCapsAsync() => Task.Run(() =>
+    async void LoadCapsAsync()
     {
-        string? reply = PipeClient.Send("caps", 3000);
-        if (reply == null)
+        if (_capsLoading || _stopped)
             return;
+        _capsLoading = true;
+        int lifetime = _lifetime;
+        string? reply = await RequestAsync("caps", 3000).ConfigureAwait(false);
+        CapsDto? caps = null;
         try
         {
-            var caps = JsonSerializer.Deserialize<CapsDto>(reply, Ipc.Json);
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => SetCaps(caps));
+            if (reply != null)
+                caps = JsonSerializer.Deserialize<CapsDto>(reply, Ipc.Json);
         }
         catch (JsonException) { }
-    });
+        PostIfCurrent(lifetime, () =>
+        {
+            _capsLoading = false;
+            if (caps != null)
+                SetCaps(caps);
+        });
+    }
 
     static void StartEngine() =>
         Process.Start(new ProcessStartInfo(Environment.ProcessPath!, "--background") { UseShellExecute = false });
