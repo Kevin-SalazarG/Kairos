@@ -37,7 +37,7 @@ public static partial class ClipLibrary
     {
         var found = new List<FileInfo>();
         if (Directory.Exists(root))
-            Walk(new DirectoryInfo(root), found, 0);
+            Walk(new DirectoryInfo(root), found.Add, 0);
         return found
             .OrderByDescending(f => f.LastWriteTime)
             .Select(f => new LibraryClip(f.FullName, GroupOf(root, f.FullName), f.LastWriteTime, f.Length, KindOf(f.Name)!.Value))
@@ -45,22 +45,42 @@ public static partial class ClipLibrary
     }
 
     /// <summary>The newest picture under <paramref name="root"/>, or null.</summary>
-    public static string? NewestPicture(string root) => Scan(root).FirstOrDefault(c => c.Kind == ClipKind.Picture)?.Path;
+    public static string? NewestPicture(string root) => Newest(root, ClipKind.Picture);
 
     /// <summary>The newest video under <paramref name="root"/> (not a picture), or null.</summary>
-    public static string? NewestVideo(string root) => Scan(root).FirstOrDefault(c => c.Kind == ClipKind.Video)?.Path;
+    public static string? NewestVideo(string root) => Newest(root, ClipKind.Video);
 
-    static void Walk(DirectoryInfo dir, List<FileInfo> into, int depth)
+    static string? Newest(string root, ClipKind kind)
+    {
+        FileInfo? newest = null;
+        DateTime newestTime = default;
+        if (Directory.Exists(root))
+            Walk(new DirectoryInfo(root), file =>
+            {
+                if (KindOf(file.Name) != kind)
+                    return;
+                DateTime time = file.LastWriteTime;
+                // Scan's sort is stable: equal timestamps keep the first enumerated file.
+                if (newest == null || time > newestTime)
+                {
+                    newest = file;
+                    newestTime = time;
+                }
+            }, 0);
+        return newest?.FullName;
+    }
+
+    static void Walk(DirectoryInfo dir, Action<FileInfo> visit, int depth)
     {
         try
         {
             foreach (var file in dir.EnumerateFiles("*", Options))
                 if (!file.Name.StartsWith('.') && KindOf(file.Name) != null)
-                    into.Add(file);
+                    visit(file);
             if (depth < MaxDepth)
                 foreach (var sub in dir.EnumerateDirectories("*", Options))
                     if (!sub.Name.StartsWith('.'))
-                        Walk(sub, into, depth + 1);
+                        Walk(sub, visit, depth + 1);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
